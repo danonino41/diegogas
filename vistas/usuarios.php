@@ -1,5 +1,5 @@
 <?php
-include_once "../../incluidos/encabezado_admin.php"; // Ruta relativa desde Admin
+include_once "../incluidos/encabezado_admin.php"; // Ruta relativa desde Admin
 ?>
 
     <!-- Login Form Container -->
@@ -8,7 +8,7 @@ include_once "../../incluidos/encabezado_admin.php"; // Ruta relativa desde Admi
             <h2>Login</h2>
             <!-- Logo como texto estilizado -->
             <div class="logo">
-                <p>Hola Admi</p>
+                <p>Usuario</p>
             </div>
             <p>Bienvenidos al Sistema</p>
 

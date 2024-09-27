@@ -1,4 +1,15 @@
-/* Estilos generales */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administrador</title>
+    <link rel="stylesheet" href="../../recursos/css/estilos.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
+    <style>
 body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
@@ -10,7 +21,6 @@ body {
     height: 100vh;
 }
 
-/* Encabezado */
 header {
     background-color: #333;
     color: white;
@@ -22,7 +32,6 @@ header h2 {
     margin: 0;
 }
 
-/* Contenedor de login */
 .login-container {
     flex: 1;
     display: flex;
@@ -50,7 +59,6 @@ header h2 {
     text-align: center;
 }
 
-/* Estilos para el texto dentro de logo */
 .logo p {
     font-family: 'Lobster', cursive;
     /* Puedes cambiar a la fuente que desees */
@@ -64,7 +72,6 @@ header h2 {
     /* Sombra secundaria para mayor efecto */
     margin: 0;
 }
-
 
 p {
     color: #666;
@@ -116,13 +123,13 @@ p {
 
 /* Footer */
 footer {
-    background-color: hsl(116, 87%, 52%);
+    background-color: #333;
     color: white;
     padding: 10px 0;
     text-align: center;
 }
+</style>
+</head>
+<body>
 
-/*revisar la longitud de los items del nav inicio/productos..*/
-.nav-item{
-    padding-left: 15px;
-}
+<?php include "../../incluidos/navbar_admin.php"; ?>
