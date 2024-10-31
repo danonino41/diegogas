@@ -8,7 +8,7 @@ include_once "../incluidos/encabezado_admin.php"; // Ruta relativa desde Admin
             <h2>Login</h2>
             <!-- Logo como texto estilizado -->
             <div class="logo">
-                <p>Usuario</p>
+                <p>Registar Usuarios</p>
             </div>
             <p>Bienvenidos al Sistema</p>
 
