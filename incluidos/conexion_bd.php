@@ -1,13 +1,17 @@
 <?php
-$host = "localhost";
-$dbname = "diegogas"; // Tu base de datos
-$username = "root";
-$password = ""; // Ajusta según tu configuración
+function obtenerConexion() {
+    $host = "localhost";
+    $dbname = "diegogas";
+    $username = "root";
+    $password = "";
 
-try {
-    $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    echo "Conexión fallida: " . $e->getMessage();
+    try {
+        $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        return $conn;
+    } catch (PDOException $e) {
+        echo "Conexión fallida: " . $e->getMessage();
+        return null;
+    }
 }
 ?>

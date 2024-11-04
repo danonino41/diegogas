@@ -20,7 +20,6 @@ if (!isset($_SESSION['roles']) || empty($_SESSION['roles'])) {
 <body>
     <header>
         <h2>Sistema de Gestión de Ventas</h2>
-        <!-- Botón de Cerrar Sesión en el encabezado -->
         <div style="position: absolute; top: 15px; right: 15px;">
             <a href="../controladores/cerrar_sesion.php" class="logout-btn">Cerrar Sesión</a>
         </div>

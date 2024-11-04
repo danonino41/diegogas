@@ -22,7 +22,7 @@ session_destroy();
     <script>
         setTimeout(() => {
             window.location.href = "../index.php";
-        }, 1000); // Redirige después de 1 segundo
+        }, 500);
     </script>
 </body>
 </html>
