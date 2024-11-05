@@ -1,5 +1,3 @@
-<?php include_once '../funciones.php' ?>
-
 <nav class="navbar navbar-expand-lg sticky-top navbar-custom">
     <div class="container-fluid">
         <a href="panel_recepcion.php" class="navbar-brand text-info fw-semibold fs-4">
@@ -35,7 +33,9 @@
                             Pedidos
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownPedidos">
+                            <li><a class="dropdown-item" href="estado_pedidos.php">Estado Pedidos</a></li>
                             <li><a class="dropdown-item" href="pedidos_pendientes.php">Pedidos Pendientes</a></li>
+                            <li><a class="dropdown-item" href="pedidos_preparados.php">Pedidos Preparados</a></li>
                             <li><a class="dropdown-item" href="pedidos_camino.php">Pedidos en Camino</a></li>
                             <li><a class="dropdown-item" href="pedidos_entregados.php">Pedidos Entregados</a></li>
                             <li><a class="dropdown-item" href="pedidos_cancelados.php">Pedidos Cancelados</a></li>
@@ -55,8 +55,8 @@
                             <i class="fas fa-user fa-fw"></i>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownPerfil">
-                            <li><a class="dropdown-item" href="MiPerfil.php"><i class="fas fa-cog"></i> Perfil</a></li>
-                            <li><a class="dropdown-item" href="Logout.php"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a></li>
+                        <!--<li><a class="dropdown-item" href="MiPerfil.php"><i class="fas fa-cog"></i> Perfil</a></li>-->
+                            <li><a class="dropdown-item" href="../../controladores/cerrar_sesion.php"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a></li>
                         </ul>
                     </li>
                 </ul>

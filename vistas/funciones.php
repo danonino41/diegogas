@@ -446,11 +446,145 @@ function calcularTotalPedido($productos) {
     return $total;
 }
 
+function descontarInventario($id_producto, $cantidad) {
+    $conn = obtenerConexion(); 
+    if (!$conn) {
+        return false;
+    }
+
+    try {
+        $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = :id_producto");
+        $stmt->bindParam(':id_producto', $id_producto, PDO::PARAM_INT);
+        $stmt->execute();
+        $producto = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$producto) {
+            throw new Exception("Producto no encontrado.");
+        }
+
+        if ($producto['existencias'] < $cantidad) {
+            throw new Exception("Cantidad insuficiente en el inventario para realizar el descuento.");
+        }
+
+        $sql = "UPDATE productos SET existencias = existencias - :cantidad WHERE id_producto = :id_producto";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':cantidad', $cantidad, PDO::PARAM_INT);
+        $stmt->bindParam(':id_producto', $id_producto, PDO::PARAM_INT);
+
+        return $stmt->execute();
+    } catch (Exception $e) {
+        echo "Error al descontar inventario: " . $e->getMessage();
+        return false;
+    }
+}
+
+function obtenerPedidosPorEstado($estado) {
+    $conexion = obtenerConexion();
+    $sql = "SELECT p.id_pedido, c.nombre_cliente, ep.descripcion_estado AS estado, p.total_pedido AS total, p.fecha_pedido AS fecha
+            FROM pedidos p
+            JOIN clientes c ON p.id_cliente = c.id_cliente
+            JOIN estado_pedido ep ON p.id_estado = ep.id_estado
+            WHERE ep.descripcion_estado = :estado";
+    $stmt = $conexion->prepare($sql);
+    $stmt->bindParam(':estado', $estado, PDO::PARAM_STR);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 
+function obtenerHistorialPedidos($limite = 5) {
+    $conexion = obtenerConexion();
+    $sql = "SELECT p.id_pedido, c.nombre_cliente, e.descripcion_estado AS estado, p.total_pedido AS total, p.fecha_pedido AS fecha
+            FROM pedidos p
+            JOIN clientes c ON p.id_cliente = c.id_cliente
+            JOIN estado_pedido e ON p.id_estado = e.id_estado
+            ORDER BY p.fecha_pedido DESC
+            LIMIT :limite";
+    $stmt = $conexion->prepare($sql);
+    $stmt->bindParam(':limite', $limite, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function obtenerProductosBajoInventario($limiteStock = 10) {
+    $conexion = obtenerConexion();
+    $sql = "SELECT p.nombre_producto, c.nombre_categoria, p.existencias 
+            FROM productos p
+            JOIN subcategorias s ON p.id_subcategoria = s.id_subcategoria
+            JOIN categorias c ON s.id_categoria = c.id_categoria
+            WHERE p.existencias <= :limiteStock";
+    $stmt = $conexion->prepare($sql);
+    $stmt->bindParam(':limiteStock', $limiteStock, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 
+function obtenerExistenciasProducto($id_producto) {
+    $conn = obtenerConexion();
+    if (!$conn) {
+        return 0; 
+    }
+    try {
+        $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = ?");
+        $stmt->execute([$id_producto]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? (int)$result['existencias'] : 0;
+    } catch (PDOException $e) {
+        echo "Error al obtener existencias del producto: " . $e->getMessage();
+        return 0;
+    }
+}
 
+function verificarContrasena($id_usuario, $contrasena_actual) {
+    $conexion = obtenerConexion();
+    $sql = "SELECT password_usuario FROM usuarios WHERE id_usuario = ?";
+    $stmt = $conexion->prepare($sql);
+    $stmt->execute([$id_usuario]);
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $usuario && $usuario['password_usuario'] === $contrasena_actual;
+}
+
+function cambiarContrasena($id_usuario, $nueva_contrasena) {
+    $conexion = obtenerConexion();
+    $sql = "UPDATE usuarios SET password_usuario = ? WHERE id_usuario = ?";
+    $stmt = $conexion->prepare($sql);
+    return $stmt->execute([$nueva_contrasena, $id_usuario]);
+}
+
+function obtenerDatosUsuario($id_usuario) {
+    $conn = obtenerConexion();
+    if (!$conn) return false;
+
+    try {
+        $sql = "SELECT u.nombre_usuario, u.fecha_registro AS fecha_registro_usuario,
+                       e.nombre_empleado, e.apellido_empleado, 
+                       e.telefono_empleado, e.numero_documento, 
+                       e.tipo_documento, e.direccion_empleado
+                FROM usuarios AS u
+                JOIN empleados AS e ON u.id_empleado = e.id_empleado
+                WHERE u.id_usuario = :id_usuario";
+                
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':id_usuario', $id_usuario, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        var_dump($usuario);
+        exit;
+
+        if (!$usuario) {
+            return null;
+        }
+
+        return $usuario;
+    } catch (PDOException $e) {
+        echo "Error en la consulta: " . $e->getMessage();
+        return false;
+    }
+}
 
 
 

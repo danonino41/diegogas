@@ -2,7 +2,7 @@
 require_once '../funciones.php';
 
 // Verificar sesión y rol
-if (!isset($_SESSION['id_usuario']) || !in_array('Administrador', $_SESSION['roles'])) {
+if (!isset($_SESSION['id_usuario']) || !in_array('Recepcionista', $_SESSION['roles'])) {
     header("Location: ../../index.php?error=acceso_denegado");
     exit();
 }

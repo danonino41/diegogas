@@ -66,11 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'subtotal' => $subtotal
             ];
         }
-
+    }
         $_SESSION['productos_seleccionados'] = $productosSeleccionados;
     }
 
-    // Quitar producto seleccionado
     if (isset($_POST['quitar_producto'])) {
         $id_producto = $_POST['id_producto'];
         $productosSeleccionados = $_SESSION['productos_seleccionados'] ?? [];
@@ -78,61 +77,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['productos_seleccionados'] = $productosSeleccionados;
     }
 
-    // Confirmar pedido
     if (isset($_POST['confirmar_pedido'])) {
-        if (isset($clienteSeleccionado['id_cliente'])) {
+        if (isset($clienteSeleccionado['id_cliente']) && !empty($productosSeleccionados)) {
             $id_cliente = $clienteSeleccionado['id_cliente'];
             $id_usuario = $_SESSION['id_usuario'];
             $total_pedido = calcularTotalPedido($productosSeleccionados);
+
+            if (!isset($_POST['tipoPago']) || !isset($_POST['tipoDespacho'])) {
+                $mensaje = "Error: Tipo de pago y despacho son obligatorios.";
+                return;
+            }
+
             $id_pago = $_POST['tipoPago'];
             $id_despacho = $_POST['tipoDespacho'];
 
-            // Crear el pedido
+            foreach ($productosSeleccionados as $producto) {
+                $id_producto = $producto['id_producto'];
+                $cantidad = $producto['cantidad'];
+                
+                $existencias = obtenerExistenciasProducto($id_producto);
+                if ($existencias < $cantidad) {
+                    $mensaje = "Error: No hay suficiente inventario para el producto " . htmlspecialchars($producto['nombre']);
+                    return;
+                }
+            }
+
             $id_pedido = crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho);
 
             if ($id_pedido) {
-                // Agregar detalles del pedido
                 foreach ($productosSeleccionados as $producto) {
-                    if (isset($producto['id_producto'])) {
-                        $id_producto = $producto['id_producto'];
-                        $cantidad = $producto['cantidad'];
-                        $precio_venta = $producto['precio_venta'];
+                    $id_producto = $producto['id_producto'];
+                    $cantidad = $producto['cantidad'];
+                    $precio_venta = $producto['precio_venta'];
 
-                        if (!agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta)) {
-                            echo "Error al agregar detalle de pedido para el producto: $id_producto";
-                        }
+                    if (agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta)) {
+                        descontarInventario($id_producto, $cantidad);
                     } else {
-                        echo "Error: Producto no tiene ID definido.";
+                        $mensaje = "Error al agregar detalle de pedido para el producto: " . htmlspecialchars($producto['nombre']);
                     }
                 }
 
-                // Limpiar la selección después de confirmar el pedido
                 unset($_SESSION['cliente_seleccionado']);
                 unset($_SESSION['productos_seleccionados']);
                 $clienteSeleccionado = null;
                 $productosSeleccionados = [];
                 $mensaje = "Pedido creado exitosamente.";
             } else {
-                $mensaje = "Error al crear pedido.";
+                $mensaje = "Error al crear pedido. Verifique los datos y vuelva a intentarlo.";
             }
         } else {
-            $mensaje = "Error: No se ha seleccionado un cliente.";
+            if (!isset($clienteSeleccionado['id_cliente'])) {
+                $mensaje = "Error: No se ha seleccionado un cliente.";
+            } elseif (empty($productosSeleccionados)) {
+                $mensaje = "Error: No hay productos seleccionados para el pedido.";
+            }
         }
     }
-}
-
-// Obtener productos y otros datos
-$productos = obtenerProductosConDetalles();
-$metodosPago = obtenerMetodosPago();
-$tiposDespacho = obtenerTiposDespacho();
 
 
-$mensaje = '';
-$busqueda = isset($_GET['busqueda']) ? $_GET['busqueda'] : '';
+    $productos = obtenerProductosConDetalles();
+    $metodosPago = obtenerMetodosPago();
+    $tiposDespacho = obtenerTiposDespacho();
 
-$productos = obtenerProductos($busqueda);
-$subcategorias = obtenerSubcategorias();
-$proveedores = obtenerProveedores();
+
+    $mensaje = '';
+    $busqueda = isset($_GET['busqueda']) ? $_GET['busqueda'] : '';
+
+    $productos = obtenerProductos($busqueda);
+    $subcategorias = obtenerSubcategorias();
+    $proveedores = obtenerProveedores();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
     $id = $_POST['id'];
@@ -151,31 +164,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_cliente'])) {
-    // Asegúrate de que cada campo esté definido antes de acceder a él
     $nombre = isset($_POST['nombre']) ? $_POST['nombre'] : null;
-    $apellido = isset($_POST['apellido']) ? $_POST['apellido'] : null;
+    $descripcion = isset($_POST['descripcion']) ? $_POST['descripcion'] : null;
     $telefono = isset($_POST['telefono']) ? $_POST['telefono'] : null;
     $direccion = isset($_POST['direccion']) ? $_POST['direccion'] : null;
 
-    // Campos opcionales
-    $coordenadas = !empty($_POST['coordenadas']) ? $_POST['coordenadas'] : null;
-    $email = !empty($_POST['email']) ? $_POST['email'] : null;
-    $descripcion = !empty($_POST['descripcion']) ? $_POST['descripcion'] : null;
+    $apellido = null;
+    $coordenadas = null;
+    $email = null;
 
-    // Verificar si los campos obligatorios están completos
-    if ($nombre && $apellido && $telefono && $direccion) {
+    if ($nombre && $descripcion && $telefono && $direccion) {
         if (agregarCliente($nombre, $apellido, $telefono, $direccion, $coordenadas, $email, $descripcion)) {
             $mensaje = "Cliente agregado correctamente.";
         } else {
             $mensaje = "Error al agregar cliente.";
         }
     } else {
-        $mensaje = "Error: Todos los campos obligatorios deben ser completados.";
+        $mensaje = "Por favor completa todos los campos obligatorios.";
     }
-    
-    // Actualiza la lista de clientes después de agregar uno nuevo
     $clientes = obtenerClientes();
 }
+
 
 
 ?>
@@ -206,30 +215,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_cliente'])) {
         <BR>
 
         <h1>Seleccionar Clientes</h1>
-<form method="POST">
-    <div class="input-group mb-3">
-        <input type="text" class="form-control" name="busqueda_cliente" placeholder="Buscar cliente" required>
-        <button class="btn btn-primary" type="submit" name="buscar_cliente">Buscar</button>
-    </div>
-</form>
+        <form method="POST">
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" name="busqueda_cliente" placeholder="Buscar cliente" required>
+                <button class="btn btn-primary" type="submit" name="buscar_cliente">Buscar</button>
+            </div>
+        </form>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="fas fa-table me-2"></i> Lista de Clientes</span>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#agregarClienteModal">Agregar</button>
-    </div>
-    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-        <?php if ($clienteSeleccionado): ?>
-            <h5>Cliente Seleccionado:</h5>
-            <p><strong>Nombre:</strong> <?php echo htmlspecialchars($clienteSeleccionado['nombre_cliente']); ?></p>
-            <p><strong>Descripción:</strong> <?php echo htmlspecialchars($clienteSeleccionado['descripcion_cliente']); ?></p>
-            <p><strong>Teléfono:</strong> <?php echo htmlspecialchars($clienteSeleccionado['telefono_cliente']); ?></p>
-            <p><strong>Dirección:</strong> <?php echo htmlspecialchars($clienteSeleccionado['direccion_cliente']); ?></p>
-            <form method="POST">
-                <button class="btn btn-warning" type="submit" name="quitar_cliente">Quitar</button>
-            </form>
-        <?php else: ?>
-            <?php if (!empty($clientes)): ?>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-table me-2"></i> Lista de Clientes</span>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#agregarClienteModal">Agregar
+                    Cliente</button>
+            </div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                <?php if ($clienteSeleccionado): ?>
+                <h5>Cliente Seleccionado:</h5>
+                <p><strong>Nombre:</strong>
+                    <?php echo htmlspecialchars($clienteSeleccionado['nombre_cliente']); ?>
+                </p>
+                <p><strong>Descripción:</strong>
+                    <?php echo htmlspecialchars($clienteSeleccionado['descripcion_cliente']); ?>
+                </p>
+                <p><strong>Teléfono:</strong>
+                    <?php echo htmlspecialchars($clienteSeleccionado['telefono_cliente']); ?>
+                </p>
+                <p><strong>Dirección:</strong>
+                    <?php echo htmlspecialchars($clienteSeleccionado['direccion_cliente']); ?>
+                </p>
+                <form method="POST">
+                    <button class="btn btn-warning" type="submit" name="quitar_cliente">Quitar</button>
+                </form>
+                <?php else: ?>
+                <?php if (!empty($clientes)): ?>
                 <table class="table table-striped table-hover align-middle">
                     <thead class="table-light">
                         <tr>
@@ -242,65 +260,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_cliente'])) {
                     </thead>
                     <tbody>
                         <?php foreach ($clientes as $cliente): ?>
-                            <tr>
-                                <td><?php echo htmlspecialchars($cliente['nombre_cliente']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['descripcion_cliente']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['telefono_cliente']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['direccion_cliente']); ?></td>
-                                <td>
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="id_cliente" value="<?php echo $cliente['id_cliente']; ?>">
-                                        <input type="hidden" name="nombre_cliente" value="<?php echo $cliente['nombre_cliente']; ?>">
-                                        <input type="hidden" name="descripcion_cliente" value="<?php echo $cliente['descripcion_cliente']; ?>">
-                                        <input type="hidden" name="telefono_cliente" value="<?php echo $cliente['telefono_cliente']; ?>">
-                                        <input type="hidden" name="direccion_cliente" value="<?php echo $cliente['direccion_cliente']; ?>">
-                                        <button class="btn btn-success btn-sm" type="submit" name="seleccionar_cliente">Seleccionar</button>
-                                    </form>
-                                </td>
-                            </tr>
+                        <tr>
+                            <td>
+                                <?php echo htmlspecialchars($cliente['nombre_cliente']); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($cliente['descripcion_cliente']); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($cliente['telefono_cliente']); ?>
+                            </td>
+                            <td>
+                                <?php echo htmlspecialchars($cliente['direccion_cliente']); ?>
+                            </td>
+                            <td>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="id_cliente"
+                                        value="<?php echo $cliente['id_cliente']; ?>">
+                                    <input type="hidden" name="nombre_cliente"
+                                        value="<?php echo $cliente['nombre_cliente']; ?>">
+                                    <input type="hidden" name="descripcion_cliente"
+                                        value="<?php echo $cliente['descripcion_cliente']; ?>">
+                                    <input type="hidden" name="telefono_cliente"
+                                        value="<?php echo $cliente['telefono_cliente']; ?>">
+                                    <input type="hidden" name="direccion_cliente"
+                                        value="<?php echo $cliente['direccion_cliente']; ?>">
+                                    <button class="btn btn-success btn-sm" type="submit"
+                                        name="seleccionar_cliente">Seleccionar</button>
+                                </form>
+                            </td>
+                        </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-            <?php else: ?>
+                <?php else: ?>
                 <p class="text-center">No se encontraron clientes.</p>
-            <?php endif; ?>
-        <?php endif; ?>
-    </div>
-</div>
-
-<!-- Modal para Agregar Cliente -->
-<div class="modal fade" id="agregarClienteModal" tabindex="-1" aria-labelledby="agregarClienteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="agregarClienteModalLabel">Agregar Cliente</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="nombre_cliente" class="form-label">Nombre</label>
-                        <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="descripcion_cliente" class="form-label">Descripción</label>
-                        <input type="text" class="form-control" id="descripcion_cliente" name="descripcion_cliente">
-                    </div>
-                    <div class="mb-3">
-                        <label for="telefono_cliente" class="form-label">Teléfono</label>
-                        <input type="text" class="form-control" id="telefono_cliente" name="telefono_cliente" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="direccion_cliente" class="form-label">Dirección</label>
-                        <input type="text" class="form-control" id="direccion_cliente" name="direccion_cliente" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary" name="agregar_cliente">Guardar Cliente</button>
-                </form>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
         </div>
-    </div>
-</div>
 
+        <div class="modal fade" id="agregarClienteModal" tabindex="-1" aria-labelledby="agregarClienteModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="agregarClienteModalLabel">Agregar Cliente</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="nombre" class="form-label">Nombre</label>
+                                <input type="text" class="form-control" id="nombre" name="nombre" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="descripcion" class="form-label">Descripción</label>
+                                <input type="text" class="form-control" id="descripcion" name="descripcion" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="telefono" class="form-label">Teléfono</label>
+                                <input type="text" class="form-control" id="telefono" name="telefono" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="direccion" class="form-label">Dirección</label>
+                                <input type="text" class="form-control" id="direccion" name="direccion" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary" name="agregar_cliente">Guardar
+                                Cliente</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <br>
         <!-- Seleccionar Productos -->
