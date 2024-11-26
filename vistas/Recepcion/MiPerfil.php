@@ -44,38 +44,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cambiar_contrasena'])
 <body>
 <?php include_once 'navbar_recepcion.php'; ?>
 
-<div class="container mt-4">
-    <h1>Perfil de Usuario</h1>
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Perfil de Usuario</h1>
 
     <?php if ($mensaje): ?>
-        <div class="alert alert-info"><?php echo htmlspecialchars($mensaje); ?></div>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <?php echo htmlspecialchars($mensaje); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
     <?php endif; ?>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <h4 class="card-title">Información del Usuario</h4>
-            <p><strong>Nombre de Usuario:</strong> <?php echo htmlspecialchars($usuario['nombre_usuario'] ?? 'No disponible'); ?></p>
-            <p><strong>Fecha de Registro:</strong> <?php echo htmlspecialchars($usuario['fecha_registro_usuario'] ?? 'No disponible'); ?></p>
+    <div class="row">
+        <!-- Información del Usuario -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h4 class="card-title text-center"><i class="fas fa-user-circle"></i> Información del Usuario</h4>
+                    <p><strong>Nombre de Usuario:</strong> <?php echo htmlspecialchars($usuario['nombre_usuario'] ?? 'No disponible'); ?></p>
+                    <p><strong>Fecha de Registro:</strong> <?php echo htmlspecialchars($usuario['fecha_registro_usuario'] ?? 'No disponible'); ?></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información del Empleado -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h4 class="card-title text-center"><i class="fas fa-id-badge"></i> Información del Empleado</h4>
+                    <p><strong>Nombre:</strong> <?php echo htmlspecialchars($usuario['nombre_empleado'] ?? 'No disponible'); ?></p>
+                    <p><strong>Apellido:</strong> <?php echo htmlspecialchars($usuario['apellido_empleado'] ?? 'No disponible'); ?></p>
+                    <p><strong>Teléfono:</strong> <?php echo htmlspecialchars($usuario['telefono_empleado'] ?? 'No disponible'); ?></p>
+                    <p><strong>Tipo de Documento:</strong> <?php echo htmlspecialchars($usuario['tipo_documento'] ?? 'No disponible'); ?></p>
+                    <p><strong>Número de Documento:</strong> <?php echo htmlspecialchars($usuario['numero_documento'] ?? 'No disponible'); ?></p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <h4 class="card-title">Información del Empleado</h4>
-            <p><strong>Nombre:</strong> <?php echo htmlspecialchars($usuario['nombre_empleado'] ?? 'No disponible'); ?></p>
-            <p><strong>Apellido:</strong> <?php echo htmlspecialchars($usuario['apellido_empleado'] ?? 'No disponible'); ?></p>
-            <p><strong>Teléfono:</strong> <?php echo htmlspecialchars($usuario['telefono_empleado'] ?? 'No disponible'); ?></p>
-            <p><strong>Tipo de Documento:</strong> <?php echo htmlspecialchars($usuario['tipo_documento'] ?? 'No disponible'); ?></p>
-            <p><strong>Número de Documento:</strong> <?php echo htmlspecialchars($usuario['numero_documento'] ?? 'No disponible'); ?></p>
-            <p><strong>Dirección:</strong> <?php echo htmlspecialchars($usuario['direccion_empleado'] ?? 'No disponible'); ?></p>
-        </div>
+    <!-- Botón Cambiar Contraseña -->
+    <div class="text-center">
+        <button type="button" class="btn btn-warning btn-lg mt-3" data-bs-toggle="modal" data-bs-target="#cambiarContrasenaModal">
+            <i class="fas fa-key"></i> Cambiar Contraseña
+        </button>
     </div>
-
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cambiarContrasenaModal">
-        Cambiar Contraseña
-    </button>
 </div>
-
 <div class="modal fade" id="cambiarContrasenaModal" tabindex="-1" aria-labelledby="cambiarContrasenaModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -108,6 +120,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cambiar_contrasena'])
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<BR>
 </body>
 </html>

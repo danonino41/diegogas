@@ -8,12 +8,40 @@ if (!isset($_SESSION['id_usuario']) || !in_array('Recepcionista', $_SESSION['rol
     exit();
 }
 
+// Procesar solicitud de cambio de estado y asignación de motorizado
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_pedido']) && isset($_POST['nuevo_estado'])) {
+    $idPedido = $_POST['id_pedido'];
+    $nuevoEstadoId = $_POST['nuevo_estado'];
+    $idMotorizado = $_POST['id_motorizado'] ?? null;
+
+    // Actualizar el estado del pedido y asignar el motorizado si se proporciona
+    actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idMotorizado);
+    header("Location: estado_pedidos.php");
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id_pedido = $_POST['id_pedido'] ?? null;
+
+    if ($id_pedido && cancelarVenta($id_pedido)) {
+        header("Location: estado_pedidos.php?mensaje=pedido_cancelado");
+    } else {
+        header("Location: estado_pedidos.php?error=no_se_pudo_cancelar");
+    }
+    exit();
+}
+
+
+
 // Obtener los pedidos por estado
 $pedidosPendientes = obtenerPedidosPorEstado('Pendiente');
 $pedidosPreparados = obtenerPedidosPorEstado('Preparado');
 $pedidosEnCamino = obtenerPedidosPorEstado('En camino');
 $pedidosEntregados = obtenerPedidosPorEstado('Entregado');
 $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
+
+// Obtener lista de motorizados
+$motorizados = obtenerMotorizados();
 ?>
 
 <!DOCTYPE html>
@@ -22,6 +50,7 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
     <meta charset="UTF-8">
     <title>Estado de Pedidos - Diego Gas</title>
     <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -53,8 +82,15 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
                                 <td>S/ <?php echo htmlspecialchars($pedido['total']); ?></td>
                                 <td><?php echo htmlspecialchars($pedido['fecha']); ?></td>
                                 <td>
-                                    <!-- Aquí podrías agregar acciones, como cambiar de estado -->
-                                    <button class="btn btn-primary btn-sm">Preparar</button>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="id_pedido" value="<?php echo $pedido['id_pedido']; ?>">
+                                        <input type="hidden" name="nuevo_estado" value="2"> <!-- ID para "Preparado" -->
+                                        <button type="submit" class="btn btn-primary btn-sm">Preparar Pedido</button>
+                                    </form>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="id_pedido" value="<?php echo $pedido['id_pedido']; ?>">
+                                        <button type="submit" class="btn btn-danger btn-sm">Anular Pedido</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -78,7 +114,7 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
                             <th>Cliente</th>
                             <th>Total</th>
                             <th>Fecha</th>
-                            <th>Acciones</th>
+                            <th>Motorizado</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,7 +125,23 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
                                 <td>S/ <?php echo htmlspecialchars($pedido['total']); ?></td>
                                 <td><?php echo htmlspecialchars($pedido['fecha']); ?></td>
                                 <td>
-                                    <button class="btn btn-success btn-sm">En Camino</button>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="id_pedido" value="<?php echo $pedido['id_pedido']; ?>">
+                                        <input type="hidden" name="nuevo_estado" value="3">
+                                        <select name="id_motorizado" class="form-select form-select-sm" required>
+                                            <option value="" disabled selected>Seleccionar Motorizado</option>
+                                            <?php foreach ($motorizados as $motorizado): ?>
+                                                <option value="<?php echo $motorizado['id_empleado']; ?>">
+                                                    <?php echo $motorizado['nombre_empleado'] . ' ' . $motorizado['apellido_empleado']; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="submit" class="btn btn-success btn-sm mt-2">Asignar y Enviar</button>
+                                    </form>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="id_pedido" value="<?php echo $pedido['id_pedido']; ?>">
+                                        <button type="submit" class="btn btn-danger btn-sm">Anular Pedido</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -100,6 +152,8 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- Apartado de pedidos en camino -->
     <div class="card mb-4">
         <div class="card-header bg-info text-white">Pedidos En Camino</div>
         <div class="card-body">
@@ -122,7 +176,11 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
                                 <td>S/ <?php echo htmlspecialchars($pedido['total']); ?></td>
                                 <td><?php echo htmlspecialchars($pedido['fecha']); ?></td>
                                 <td>
-                                    <button class="btn btn-success btn-sm">Entregado</button>
+                                    <form method="POST" style="display:inline;">
+                                        <input type="hidden" name="id_pedido" value="<?php echo $pedido['id_pedido']; ?>">
+                                        <input type="hidden" name="nuevo_estado" value="4"> <!-- ID para "Entregado" -->
+                                        <button type="submit" class="btn btn-success btn-sm">Entregar</button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -134,6 +192,7 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
         </div>
     </div>
 
+    <!-- Apartado de pedidos entregados -->
     <div class="card mb-4">
         <div class="card-header bg-success text-white">Pedidos Entregados</div>
         <div class="card-body">
@@ -164,6 +223,7 @@ $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
         </div>
     </div>
 
+    <!-- Apartado de pedidos cancelados -->
     <div class="card mb-4">
         <div class="card-header bg-danger text-white">Pedidos Cancelados</div>
         <div class="card-body">

@@ -14,7 +14,7 @@ $pedidosEntregados = obtenerPedidosPorEstado('Entregado');
 $pedidosCancelados = obtenerPedidosPorEstado('Cancelado');
 $historialPedidos = obtenerHistorialPedidos(5) ?? [];
 $productosBajoInventario = obtenerProductosBajoInventario(5) ?? []; 
-
+$usuario = obtenerDatosUsuario($_SESSION['id_usuario']);
 ?>
 
 
@@ -30,10 +30,14 @@ $productosBajoInventario = obtenerProductosBajoInventario(5) ?? [];
 </head>
 <body>
 <?php include_once 'navbar_recepcion.php'; ?>
-
+    
     <div class="container mt-4">
-        <h1>Dashboard Recepcionista</h1>
-        <br>
+        
+    <h1>Bienvenido <?php echo htmlspecialchars($usuario['nombre_empleado'] ?? 'Usuario no encontrado') . "!!"; ?></h1>
+    <h4>Fecha: <?php echo date('d-m-Y'); ?></h4>
+    <h4>Fecha Actual: <span id="fecha_actual"></span></h4>
+    <h4>Hora: <span id="hora_actual"></span></h4>
+
         <div class="row">
             <div class="col-md-3">
                 <div class="card text-white bg-warning mb-3">
@@ -76,6 +80,7 @@ $productosBajoInventario = obtenerProductosBajoInventario(5) ?? [];
                 </div>
             </div>
         </div>
+        
     <h3>Historial de Pedidos Recientes</h3>
     <div class="table-responsive">
         <table class="table table-striped">
@@ -124,8 +129,28 @@ $productosBajoInventario = obtenerProductosBajoInventario(5) ?? [];
         </table>
     </div>
 
-    <BR><BR><BR></BR>
+    <BR><BR>
 
+    <script>
+    function fechaActual(){
+        const ahora = new Date();
+        const dia = ahora.getDay().toString().padStart(2, '0');
+        const mes = ahora.getMonth().toString().padStart(2, '0');
+        const ano = ahora.getYear().toString().padStart(2, '0');
+        document.getElemntById('fecha_actual').textContent = `${dia}-${mes}-${ano}`;
+    }    
+    function actualizarHora() {
+        const ahora = new Date();
+        const hora = ahora.getHours().toString().padStart(2, '0');
+        const minutos = ahora.getMinutes().toString().padStart(2, '0'); 
+        const segundos = ahora.getSeconds().toString().padStart(2, '0');
+        document.getElementById('hora_actual').textContent = `${hora}:${minutos}:${segundos}`;
+    }
+    actualizarHora();
+    setInterval(actualizarHora, 1000);
+</script>
+
+                    
 </div>
 </body>
 </html>

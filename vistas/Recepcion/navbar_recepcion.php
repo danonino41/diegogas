@@ -28,7 +28,10 @@
                     <li class="nav-item p-3 py-md-1">
                         <a href="pedido_recepcion.php" class="nav-link">Realizar Pedido</a>
                     </li>
-                    <li class="nav-item dropdown p-3 py-md-1">
+                    <li class="nav-item p-3 py-md-1">
+                        <a href="estado_pedidos.php" class="nav-link">Estado Pedidos</a>
+                    </li>
+                    <!--<li class="nav-item dropdown p-3 py-md-1">
                         <a href="#" class="nav-link dropdown-toggle" id="navbarDropdownPedidos" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Pedidos
                         </a>
@@ -40,7 +43,7 @@
                             <li><a class="dropdown-item" href="pedidos_entregados.php">Pedidos Entregados</a></li>
                             <li><a class="dropdown-item" href="pedidos_cancelados.php">Pedidos Cancelados</a></li>
                         </ul>
-                    </li>                    
+                    </li>-->                    
                     <li class="nav-item dropdown p-3 py-md-1">
                         <a href="#" class="nav-link dropdown-toggle" id="navbarDropdownVentas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Ventas
@@ -55,7 +58,7 @@
                             <i class="fas fa-user fa-fw"></i>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownPerfil">
-                        <!--<li><a class="dropdown-item" href="MiPerfil.php"><i class="fas fa-cog"></i> Perfil</a></li>-->
+                            <li><a class="dropdown-item" href="MiPerfil.php"><i class="fas fa-cog"></i> Perfil</a></li>
                             <li><a class="dropdown-item" href="../../controladores/cerrar_sesion.php"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a></li>
                         </ul>
                     </li>
