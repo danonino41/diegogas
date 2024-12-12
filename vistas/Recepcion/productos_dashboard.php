@@ -23,7 +23,8 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Productos - Diego Gas</title>
-    <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="../../recursos/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -35,7 +36,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Total de Productos</h5>
-                        <p class="card-text"><?php echo $totalProductos; ?></p>
+                        <p class="card-text"><?php echo $totalProductos > 0 ? $totalProductos : 'No hay productos en inventario'; ?></p>
                     </div>
                 </div>
             </div>
@@ -45,7 +46,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Balones de Gas 5 kg</h5>
-                        <p class="card-text"><?php echo $stock5kg; ?></p>
+                        <p class="card-text"><?php echo $stock5kg > 0 ? $stock5kg : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>
@@ -53,7 +54,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Balones de Gas 10 kg</h5>
-                        <p class="card-text"><?php echo $stock10kg; ?></p>
+                        <p class="card-text"><?php echo $stock10kg > 0 ? $stock10kg : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>
@@ -61,7 +62,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Balones de Gas 15 kg</h5>
-                        <p class="card-text"><?php echo $stock15kg; ?></p>
+                        <p class="card-text"><?php echo $stock15kg > 0 ? $stock15kg : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>
@@ -69,7 +70,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Balones de Gas 45 kg</h5>
-                        <p class="card-text"><?php echo $stock45kg; ?></p>
+                        <p class="card-text"><?php echo $stock45kg > 0 ? $stock45kg : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>
@@ -79,7 +80,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Válvulas</h5>
-                        <p class="card-text"><?php echo $stockValvulas; ?></p>
+                        <p class="card-text"><?php echo $stockValvulas > 0 ? $stockValvulas : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>
@@ -87,7 +88,7 @@ $stockMangueras = obtenerStockAccesorios('Mangueras');
                 <div class="card text-center">
                     <div class="card-body">
                         <h5 class="card-title">Stock de Mangueras</h5>
-                        <p class="card-text"><?php echo $stockMangueras; ?></p>
+                        <p class="card-text"><?php echo $stockMangueras > 0 ? $stockMangueras : 'No disponible'; ?></p>
                     </div>
                 </div>
             </div>

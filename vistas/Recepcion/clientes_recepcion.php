@@ -21,52 +21,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_cliente'])) {
     $dni_cliente = $_POST['dni_cliente'] ?? null;
     $email = $_POST['email'] ?? null;
     $descripcion = $_POST['descripcion'] ?? null;
+    $direccion = $_POST['direccion'] ?? null;
 
-    $id_cliente = agregarCliente($nombre, $apellido, $dni_cliente, $email, $descripcion);
+    if (empty($dni_cliente) || !preg_match('/^\d+$/', $dni_cliente) || strlen($dni_cliente) > 20) {
+        $mensaje = "El DNI no es válido. Debe ser un número y no exceder 20 caracteres.";
+    } elseif (verificarDniDuplicado($dni_cliente)) {
+        $mensaje = "El DNI ya está registrado. No se puede agregar el cliente.";
+    } else {
+        $id_cliente = agregarCliente($nombre, $apellido, $dni_cliente, $email, $descripcion, $telefono, $direccion);
 
-    if ($id_cliente) {
-        if (agregarTelefonoCliente($id_cliente, $telefono, true)) {
+        if ($id_cliente) {
             $mensaje = "Cliente agregado correctamente.";
         } else {
-            $mensaje = "Error al agregar el teléfono del cliente.";
+            $mensaje = "Error al agregar cliente.";
         }
-    } else {
-        $mensaje = "Error al agregar cliente.";
     }
-    $clientes = obtenerClientesConTelefonoPrincipal(); // Actualizar lista
+
+    $clientes = obtenerClientesConTelefonoPrincipal(); // Actualizar lista de clientes
 }
 
-// Editar cliente
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_cliente'])) {
-    $id = $_POST['id'];
-    $nombre = $_POST['nombre'];
-    $apellido = $_POST['apellido'] ?? null;
-    $telefono = $_POST['telefono'];
-    $dni_cliente = $_POST['dni_cliente'] ?? null;
-    $email = $_POST['email'] ?? null;
-    $descripcion = $_POST['descripcion'] ?? null;
 
-    if (actualizarCliente($id, $nombre, $apellido, $email, $descripcion, $dni_cliente)) {
-        if (actualizarTelefonoPrincipal($id, $telefono)) {
-            $mensaje = "Cliente actualizado correctamente.";
-        } else {
-            $mensaje = "Error al actualizar el teléfono principal del cliente.";
-        }
+// Verificar si un DNI está duplicado (AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_dni'])) {
+    $dni_cliente = $_POST['dni_cliente'];
+    if (verificarDniDuplicado($dni_cliente)) {
+        echo "duplicado";
     } else {
-        $mensaje = "Error al actualizar cliente.";
+        echo "disponible";
     }
-    $clientes = obtenerClientesConTelefonoPrincipal(); // Actualizar lista
-}
-
-// Eliminar cliente
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
-    $id = $_GET['eliminar'];
-    if (eliminarCliente($id)) {
-        $mensaje = "Cliente eliminado correctamente.";
-    } else {
-        $mensaje = "Error al eliminar cliente.";
-    }
-    $clientes = obtenerClientesWithTelefonoPrincipal(); // Actualizar lista
+    exit();
 }
 ?>
 
@@ -77,33 +60,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clientes - Diego Gas</title>
-    <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="../../recursos/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 
 <body>
     <?php include_once 'navbar_recepcion.php'; ?>
-
     <div class="container mt-4">
         <h1>Clientes</h1>
+
+        <!-- Mensaje -->
         <?php if ($mensaje): ?>
-        <div class="alert alert-info" id="alert">
-            <?php echo $mensaje; ?>
-        </div>
+            <div class="alert alert-danger" id="alertaDNI">
+                <?php echo $mensaje; ?>
+            </div>
         <?php endif; ?>
 
+        <!-- Formulario de búsqueda -->
         <form method="GET" action="clientes_recepcion.php" class="mb-3">
             <div class="input-group">
-                <input type="text" name="busqueda" class="form-control" placeholder="Buscar cliente por nombre, teléfono o DNI" value="<?php echo htmlspecialchars($busqueda); ?>">
+                <input type="text" name="busqueda" class="form-control" placeholder="Buscar cliente por nombre, teléfono, DNI o dirección" value="<?php echo htmlspecialchars($busqueda); ?>">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
             </div>
         </form>
 
+        <!-- Botón para agregar cliente -->
         <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalAgregarEditar">
             <i class="fas fa-plus"></i> Agregar Cliente
         </button>
 
+        <!-- Tabla de clientes -->
         <div class="card mb-4">
             <div class="card-header">
                 <i class="fas fa-table me-1"></i>
@@ -119,25 +107,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
                                 <th>DNI</th>
                                 <th>Teléfono Principal</th>
                                 <th>Email</th>
+                                <th>Dirección</th>
                                 <th>Fecha Registro</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($clientes as $cliente): ?>
-                            <tr>
-                                <td><?php echo htmlspecialchars($cliente['nombre_cliente']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['apellido_cliente'] ?? 'N/A'); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['dni_cliente'] ?? 'No registrado'); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['telefono_principal'] ?? 'Sin teléfono'); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['email_cliente'] ?? 'No registrado'); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['fecha_registro_cliente']); ?></td>
-                                <td>
-                                    <a href="detalles_cliente.php?id_cliente=<?php echo $cliente['id_cliente']; ?>" class="btn btn-info btn-sm">
-                                        <i class="fas fa-info-circle"></i> Ver Detalles
-                                    </a>
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($cliente['nombre_cliente']); ?></td>
+                                    <td><?php echo !empty($cliente['apellido_cliente'])? htmlspecialchars($cliente['apellido_cliente']): 'No registrado';
+                                        ?>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($cliente['dni_cliente'] ?? 'No registrado'); ?></td>
+                                    <td><?php echo htmlspecialchars($cliente['telefono_principal'] ?? 'Sin teléfono'); ?></td>
+                                    <td><?php echo !empty($cliente['email_cliente'])? htmlspecialchars($cliente['email_cliente']): 'No registrado';
+                                        ?>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($cliente['direccion_principal'] ?? 'No registrado'); ?></td>
+                                    <td><?php echo htmlspecialchars($cliente['fecha_registro_cliente']); ?></td>
+                                    <td>
+                                        <a href="detalles_cliente.php?id_cliente=<?php echo $cliente['id_cliente']; ?>" class="btn btn-info btn-sm">
+                                            <i class="fas fa-info-circle"></i> Ver Detalles
+                                        </a>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
@@ -150,28 +144,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
     <div class="modal fade" id="modalAgregarEditar" tabindex="-1" aria-labelledby="modalAgregarEditarLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="clientes_recepcion.php">
+                <form id="formAgregarCliente" method="POST" action="clientes_recepcion.php">
                     <div class="modal-header">
                         <h5 class="modal-title" id="modalAgregarEditarLabel">Agregar Cliente</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
+                        <div id="alertaError" class="alert alert-danger" style="display:none;"></div>
                         <input type="hidden" id="cliente-id" name="id">
                         <div class="mb-3">
                             <label for="nombre" class="form-label">Nombre</label>
                             <input type="text" class="form-control" id="cliente-nombre" name="nombre" required>
+                            <small class="text-danger" id="error-nombre" style="display:none;"></small>
                         </div>
                         <div class="mb-3">
                             <label for="apellido" class="form-label">Apellido</label>
                             <input type="text" class="form-control" id="cliente-apellido" name="apellido">
+                            <small class="text-danger" id="error-apellido" style="display:none;"></small>
                         </div>
                         <div class="mb-3">
                             <label for="dni_cliente" class="form-label">DNI</label>
-                            <input type="text" class="form-control" id="cliente-dni" name="dni_cliente">
+                            <input type="text" class="form-control" id="cliente-dni" name="dni_cliente" required>
+                            <small class="text-danger" id="error-dni" style="display:none;"></small>
                         </div>
                         <div class="mb-3">
                             <label for="telefono" class="form-label">Teléfono</label>
-                            <input type="text" class="form-control" id="cliente-telefono" name="telefono" required>
+                            <input type="text" class="form-control" id="cliente-telefono" name="telefono">
+                            <small class="text-danger" id="error-telefono" style="display:none;"></small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="direccion" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" id="cliente-direccion" name="direccion">
+                            <small class="text-danger" id="error-direccion" style="display:none;"></small>
                         </div>
                         <div class="mb-3">
                             <label for="email" class="form-label">Email</label>
@@ -183,9 +187,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
                         </div>
                     </div>
                     <div class="modal-footer">
+                        <button type="submit" class="btn btn-primary" name="agregar_cliente">Guardar</button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary" name="agregar_cliente" id="btnAgregarCliente">Guardar</button>
-                        <button type="submit" class="btn btn-primary" name="editar_cliente" id="btnEditarCliente" style="display: none;">Actualizar</button>
                     </div>
                 </form>
             </div>
@@ -193,50 +196,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar'])) {
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const modal = document.getElementById("modalAgregarEditar");
-            const clienteIdInput = document.getElementById("cliente-id");
-            const clienteNombreInput = document.getElementById("cliente-nombre");
-            const clienteApellidoInput = document.getElementById("cliente-apellido");
-            const clienteDniInput = document.getElementById("cliente-dni");
-            const clienteTelefonoInput = document.getElementById("cliente-telefono");
-            const clienteEmailInput = document.getElementById("cliente-email");
-            const clienteDescripcionInput = document.getElementById("cliente-descripcion");
-            const btnAgregarCliente = document.getElementById("btnAgregarCliente");
-            const btnEditarCliente = document.getElementById("btnEditarCliente");
-
-            modal.addEventListener("show.bs.modal", (event) => {
-                const button = event.relatedTarget;
-                const id = button.getAttribute("data-id");
-
-                if (id) {
-                    clienteIdInput.value = id;
-                    clienteNombreInput.value = button.getAttribute("data-nombre");
-                    clienteApellidoInput.value = button.getAttribute("data-apellido");
-                    clienteDniInput.value = button.getAttribute("data-dni");
-                    clienteTelefonoInput.value = button.getAttribute("data-telefono");
-                    clienteEmailInput.value = button.getAttribute("data-email");
-                    clienteDescripcionInput.value = button.getAttribute("data-descripcion");
-
-                    document.getElementById("modalAgregarEditarLabel").textContent = "Editar Cliente";
-                    btnAgregarCliente.style.display = "none";
-                    btnEditarCliente.style.display = "inline-block";
+        $(document).ready(function() {
+            $('#cliente-nombre').on('input', function() {
+                const nombre = $(this).val();
+                if (!/^[a-zA-Z\sáéíóúÁÉÍÓÚ]+$/.test(nombre)) {
+                    $('#error-nombre').text('El nombre solo puede contener letras y espacios.').show();
                 } else {
-                    clienteIdInput.value = "";
-                    clienteNombreInput.value = "";
-                    clienteApellidoInput.value = "";
-                    clienteDniInput.value = "";
-                    clienteTelefonoInput.value = "";
-                    clienteEmailInput.value = "";
-                    clienteDescripcionInput.value = "";
+                    $('#error-nombre').hide();
+                }
+            });
 
-                    document.getElementById("modalAgregarEditarLabel").textContent = "Agregar Cliente";
-                    btnAgregarCliente.style.display = "inline-block";
-                    btnEditarCliente.style.display = "none";
+            $('#cliente-apellido').on('input', function() {
+                const apellido = $(this).val();
+                if (!/^[a-zA-Z\sáéíóúÁÉÍÓÚ]+$/.test(apellido)) {
+                    $('#error-apellido').text('El apellido solo puede contener letras y espacios.').show();
+                } else {
+                    $('#error-apellido').hide();
+                }
+            });
+
+            $('#cliente-telefono').on('input', function() {
+                const telefono = $(this).val();
+                if (!/^[0-9]+$/.test(telefono)) {
+                    $('#error-telefono').text('El teléfono solo puede contener números.').show();
+                } else {
+                    $('#error-telefono').hide();
+                }
+            });
+
+            $('#cliente-dni').on('input', function() {
+                const dni = $(this).val();
+                if (!/^\d+$/.test(dni)) {
+                    $('#error-dni').text('El DNI solo puede contener números.').show();
+                } else {
+                    $('#error-dni').hide();
+                }
+
+                if (dni.length >= 8) {
+                    $.post('clientes_recepcion.php', {
+                        verificar_dni: true,
+                        dni_cliente: dni
+                    }, function(data) {
+                        if (data === 'duplicado') {
+                            $('#error-dni').text('El DNI ya está registrado.').show();
+                        } else {
+                            $('#error-dni').hide();
+                        }
+                    });
+                }
+            });
+
+            $('#cliente-direccion').on('input', function() {
+                const direccion = $(this).val();
+                if (direccion.length < 5) {
+                    $('#error-direccion').text('La dirección debe tener al menos 5 caracteres.').show();
+                } else {
+                    $('#error-direccion').hide();
+                }
+            });
+
+            $('#formAgregarCliente').on('submit', function(event) {
+                if ($('#error-nombre').is(':visible') || $('#error-apellido').is(':visible') ||
+                    $('#error-dni').is(':visible') || $('#error-direccion').is(':visible')) {
+                    event.preventDefault();
                 }
             });
         });
     </script>
+
 </body>
 
 </html>

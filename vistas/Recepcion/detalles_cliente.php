@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
 <head>
     <meta charset="UTF-8">
     <title>Detalles del Cliente</title>
-    <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="../../recursos/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
@@ -185,10 +185,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
                 Teléfonos
             </div>
             <div class="card-body">
-                <?php 
+                <?php
                 $telefonos = obtenerTelefonosPorCliente($id_cliente);
                 if (!empty($telefonos)): ?>
-                    <table class="table table-striped" >
+                    <table class="table table-striped">
                         <thead>
                             <tr>
                                 <th>Teléfono</th>
@@ -209,8 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
                                             <i class="fas fa-edit"></i> Editar
                                         </button>
                                         <a href="detalles_cliente.php?id_cliente=<?php echo $id_cliente; ?>&eliminar_telefono=<?php echo $telefono['id_telefono']; ?>"
-                                        class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de eliminar este teléfono?');">
-                                        <i class="fas fa-trash-alt"></i> Eliminar
+                                            class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de eliminar este teléfono?');">
+                                            <i class="fas fa-trash-alt"></i> Eliminar
                                         </a>
                                     </td>
                                 </tr>
@@ -260,8 +260,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
                                             <i class="fas fa-edit"></i> Editar
                                         </button>
                                         <a href="detalles_cliente.php?id_cliente=<?php echo $id_cliente; ?>&eliminar_direccion=<?php echo $direccion['id_direccion']; ?>"
-                                           class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de eliminar esta dirección?');">
-                                           <i class="fas fa-trash-alt"></i> Eliminar
+                                            class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de eliminar esta dirección?');">
+                                            <i class="fas fa-trash-alt"></i> Eliminar
                                         </a>
                                     </td>
                                 </tr>
@@ -291,6 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
                                 <th>Fecha</th>
                                 <th>Total</th>
                                 <th>Estado</th>
+                                <th>Detalles</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -300,6 +301,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
                                     <td><?php echo htmlspecialchars($compra['fecha_pedido']); ?></td>
                                     <td>S/ <?php echo htmlspecialchars($compra['total_pedido']); ?></td>
                                     <td><?php echo htmlspecialchars($compra['estado']); ?></td>
+                                    <td>
+                                        <a href="detalles_pedido.php?id_pedido=<?php echo $compra['id_pedido']; ?>" class="btn btn-info">
+                                            Ver Detalles
+                                        </a>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -313,7 +319,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
 
     <!-- Modales -->
 
-        <div class="modal fade" id="modalTelefono" tabindex="-1" aria-labelledby="modalTelefonoLabel" aria-hidden="true">
+    <div class="modal fade" id="modalTelefono" tabindex="-1" aria-labelledby="modalTelefonoLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <form method="POST" action="detalles_cliente.php?id_cliente=<?php echo $id_cliente; ?>">
@@ -453,28 +459,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['eliminar_telefono'])) {
             });
         });
         document.addEventListener("DOMContentLoaded", () => {
-        const modal = document.getElementById("modalTelefono");
-        const idInput = document.getElementById("telefono-id");
-        const telefonoInput = document.getElementById("telefono");
-        const esPrincipalInput = document.getElementById("es_principal");
+            const modal = document.getElementById("modalTelefono");
+            const idInput = document.getElementById("telefono-id");
+            const telefonoInput = document.getElementById("telefono");
+            const esPrincipalInput = document.getElementById("es_principal");
 
-        modal.addEventListener("show.bs.modal", (event) => {
-            const button = event.relatedTarget;
-            const id = button.getAttribute("data-id");
+            modal.addEventListener("show.bs.modal", (event) => {
+                const button = event.relatedTarget;
+                const id = button.getAttribute("data-id");
 
-            if (id) {
-                idInput.value = id;
-                telefonoInput.value = button.getAttribute("data-telefono");
-                esPrincipalInput.checked = button.getAttribute("data-es-principal") === "1";
-                document.getElementById("modalTelefonoLabel").textContent = "Editar Teléfono";
-            } else {
-                idInput.value = "";
-                telefonoInput.value = "";
-                esPrincipalInput.checked = false;
-                document.getElementById("modalTelefonoLabel").textContent = "Agregar Teléfono";
-            }
+                if (id) {
+                    idInput.value = id;
+                    telefonoInput.value = button.getAttribute("data-telefono");
+                    esPrincipalInput.checked = button.getAttribute("data-es-principal") === "1";
+                    document.getElementById("modalTelefonoLabel").textContent = "Editar Teléfono";
+                } else {
+                    idInput.value = "";
+                    telefonoInput.value = "";
+                    esPrincipalInput.checked = false;
+                    document.getElementById("modalTelefonoLabel").textContent = "Agregar Teléfono";
+                }
+            });
         });
-    });
     </script>
 
     <script src="../../recursos/js/cliente.js"></script>

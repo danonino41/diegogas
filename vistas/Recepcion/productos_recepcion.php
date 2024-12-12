@@ -9,58 +9,99 @@ if (!isset($_SESSION['id_usuario']) || !in_array('Recepcionista', $_SESSION['rol
 
 $mensaje = '';
 $busqueda = isset($_GET['busqueda']) ? $_GET['busqueda'] : '';
+$categoria = isset($_GET['categoria']) ? $_GET['categoria'] : '';
+$subcategoria = isset($_GET['subcategoria']) ? $_GET['subcategoria'] : '';
+$ordenar_por_precio = isset($_GET['ordenar_por_precio']) ? $_GET['ordenar_por_precio'] : '';
 
-$productos = obtenerProductos($busqueda);
+// Obtener productos con los filtros
+$productos = obtenerProductos($busqueda, $categoria, $subcategoria, $ordenar_por_precio);
 $subcategorias = obtenerSubcategorias();
+$categorias = obtenerCategorias();  // Obtener las categorías desde la base de datos
 $proveedores = obtenerProveedores();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
     $id = $_POST['id'];
-    $nombre = $_POST['nombre'];
     $precio_venta = $_POST['precio_venta'];
-    $existencias = $_POST['existencias'];
-    $id_subcategoria = $_POST['id_subcategoria'];
-    $id_proveedor = $_POST['id_proveedor'];
-
-    if (actualizarProducto($id, $nombre, $precio_venta, $existencias, $id_subcategoria, $id_proveedor)) {
-        $mensaje = "Producto actualizado correctamente.";
-    } else {
-        $mensaje = "Error al actualizar producto.";
+    if ($_SESSION['roles'][0] == 'Recepcionista') {
+        if (actualizarProducto($id, $precio_venta)) {
+            $mensaje = "Precio actualizado correctamente.";
+        } else {
+            $mensaje = "Error al actualizar el precio.";
+        }
     }
-    $productos = obtenerProductos();
 }
+
+
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Productos - Diego Gas</title>
-    <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="../../recursos/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
 <body>
     <?php include_once 'navbar_recepcion.php'; ?>
-
     <?php include_once 'productos_dashboard.php'; ?>
-
 
     <div class="container mt-4">
         <h1>Productos</h1>
 
         <?php if ($mensaje): ?>
-        <div class="alert alert-info" id="alert" style="opacity: 1;
-            transition: opacity 1s ease;">
-            <?php echo $mensaje; ?>
-        </div>
+            <div class="alert alert-info" id="alert" style="opacity: 1; transition: opacity 1s ease;">
+                <?php echo $mensaje; ?>
+            </div>
         <?php endif; ?>
 
+        <!-- Filtro de búsqueda -->
         <form method="GET" action="productos_recepcion.php" class="mb-3">
             <div class="input-group">
                 <input type="text" name="busqueda" class="form-control" placeholder="Buscar producto por nombre, categoría o subcategoría" value="<?php echo htmlspecialchars($busqueda); ?>">
+
+                <!-- Filtro de Categorías -->
+                <select class="form-select" name="categoria" id="categoria">
+                    <option value="">Seleccione Categoría</option>
+                    <?php foreach ($categorias as $cat): ?>
+                        <option value="<?php echo $cat['nombre_categoria']; ?>" <?php echo $categoria == $cat['nombre_categoria'] ? 'selected' : ''; ?>>
+                            <?php echo $cat['nombre_categoria']; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Filtro de Subcategorías -->
+                <select class="form-select" name="subcategoria" id="subcategoria">
+                    <option value="">Seleccione Subcategoría</option>
+                    <?php
+                    if ($categoria == 'Balones de Gas') {
+                        // Si la categoría seleccionada es "Balones de Gas"
+                        $subcats = ['Balón de Gas 5 kg', 'Balón de Gas 10 kg', 'Balón de Gas 15 kg', 'Balón de Gas 45 kg'];
+                    } elseif ($categoria == 'Accesorios') {
+                        // Si la categoría es "Accesorios"
+                        $subcats = ['Mangueras', 'Válvulas', 'Abrazaderas'];
+                    } else {
+                        $subcats = [];
+                    }
+
+                    foreach ($subcats as $subcat): ?>
+                        <option value="<?php echo $subcat; ?>" <?php echo $subcategoria == $subcat ? 'selected' : ''; ?>>
+                            <?php echo $subcat; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Ordenar por Precio -->
+                <select class="form-select" name="ordenar_por_precio">
+                    <option value="">Ordenar por Precio</option>
+                    <option value="ASC" <?php echo $ordenar_por_precio == 'ASC' ? 'selected' : ''; ?>>Ascendente</option>
+                    <option value="DESC" <?php echo $ordenar_por_precio == 'DESC' ? 'selected' : ''; ?>>Descendente</option>
+                </select>
+
                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
             </div>
         </form>
@@ -105,9 +146,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
                                                 data-id_proveedor="<?php echo htmlspecialchars($producto['id_proveedor']); ?>">
                                                 <i class="fas fa-edit"></i> Editar
                                             </button>
-                                            <a href="productos_recepcion.php?eliminar=<?php echo $producto['id_producto']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de eliminar este producto?');">
-                                                <i class="fas fa-trash-alt"></i> Eliminar
-                                            </a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -130,36 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
                     <div class="modal-body">
                         <input type="hidden" id="producto-id" name="id">
                         <div class="mb-3">
-                            <label for="nombre" class="form-label">Nombre</label>
-                            <input type="text" class="form-control" id="producto-nombre" name="nombre" required>
-                        </div>
-                        <div class="mb-3">
                             <label for="precio_venta" class="form-label">Precio Venta</label>
                             <input type="number" class="form-control" id="producto-precio_venta" name="precio_venta" step="0.01" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="existencias" class="form-label">Existencias</label>
-                            <input type="number" class="form-control" id="producto-existencias" name="existencias" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_subcategoria" class="form-label">Subcategoría</label>
-                            <select class="form-select" id="producto-id_subcategoria" name="id_subcategoria" required>
-                                <?php foreach ($subcategorias as $subcategoria): ?>
-                                    <option value="<?php echo $subcategoria['id_subcategoria']; ?>">
-                                        <?php echo htmlspecialchars($subcategoria['nombre_subcategoria']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="id_proveedor" class="form-label">Proveedor</label>
-                            <select class="form-select" id="producto-id_proveedor" name="id_proveedor" required>
-                                <?php foreach ($proveedores as $proveedor): ?>
-                                    <option value="<?php echo $proveedor['id_proveedor']; ?>">
-                                        <?php echo htmlspecialchars($proveedor['nombre_proveedor']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -173,23 +183,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Detectar cambios en los filtros
+            const categoriaSelect = document.getElementById("categoria");
+            const subcategoriaSelect = document.getElementById("subcategoria");
+            const inputBusqueda = document.getElementById("inputBusqueda");
+            const ordenarSelect = document.getElementById("ordenar_por_precio");
+
+            // Función para hacer submit en el formulario cuando se cambia un filtro
+            function actualizarProductos() {
+                const form = document.getElementById("filtroForm");
+                form.submit(); // Enviar el formulario con los valores actuales
+            }
+
+            // Detectar cambio en la categoría
+            categoriaSelect.addEventListener("change", function() {
+                // Cuando cambia la categoría, actualizar las subcategorías dinámicamente
+                const categoria = categoriaSelect.value;
+
+                // Actualizar subcategorías según la categoría seleccionada
+                let subcategoriasHTML = '<option value="">Seleccione Subcategoría</option>';
+                if (categoria === "Balones de Gas") {
+                    subcategoriasHTML += `
+                <option value="Balón de Gas 5 kg">Balón de Gas 5 kg</option>
+                <option value="Balón de Gas 10 kg">Balón de Gas 10 kg</option>
+                <option value="Balón de Gas 15 kg">Balón de Gas 15 kg</option>
+                <option value="Balón de Gas 45 kg">Balón de Gas 45 kg</option>
+            `;
+                } else if (categoria === "Accesorios") {
+                    subcategoriasHTML += `
+                <option value="Mangueras">Mangueras</option>
+                <option value="Válvulas">Válvulas</option>
+                <option value="Abrazaderas">Abrazaderas</option>
+            `;
+                }
+
+                subcategoriaSelect.innerHTML = subcategoriasHTML;
+                actualizarProductos(); // Actualizar productos
+            });
+
+            // Detectar cambio en subcategoría
+            subcategoriaSelect.addEventListener("change", actualizarProductos);
+
+            // Detectar cambio en búsqueda
+            inputBusqueda.addEventListener("input", actualizarProductos);
+
+            // Detectar cambio en orden de precio
+            ordenarSelect.addEventListener("change", actualizarProductos);
+        });
+
         document.addEventListener("DOMContentLoaded", () => {
             const modalEditarProducto = document.getElementById("modalEditarProducto");
             const productoIdInput = document.getElementById("producto-id");
-            const productoNombreInput = document.getElementById("producto-nombre");
             const productoPrecioVentaInput = document.getElementById("producto-precio_venta");
-            const productoExistenciasInput = document.getElementById("producto-existencias");
-            const productoIdSubcategoriaSelect = document.getElementById("producto-id_subcategoria");
-            const productoIdProveedorSelect = document.getElementById("producto-id_proveedor");
 
             modalEditarProducto.addEventListener("show.bs.modal", (event) => {
                 const button = event.relatedTarget;
                 productoIdInput.value = button.getAttribute("data-id");
-                productoNombreInput.value = button.getAttribute("data-nombre");
                 productoPrecioVentaInput.value = button.getAttribute("data-precio_venta");
-                productoExistenciasInput.value = button.getAttribute("data-existencias");
-                productoIdSubcategoriaSelect.value = button.getAttribute("data-id_subcategoria");
-                productoIdProveedorSelect.value = button.getAttribute("data-id_proveedor");
             });
         });
 
@@ -198,7 +249,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
             if (alert) {
                 alert.style.opacity = '0';
             }
-        },1000);
+        }, 1000);
     </script>
 </body>
+
 </html>

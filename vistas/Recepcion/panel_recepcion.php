@@ -24,64 +24,24 @@ $usuario = obtenerDatosUsuario($_SESSION['id_usuario']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Recepcionista - Diego Gas</title>
-    <link rel="stylesheet" href="../../recursos/css/estilosmenu.css">
+    <link rel="stylesheet" href="../../recursos/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
+
 <?php include_once 'navbar_recepcion.php'; ?>
     
+<main>
     <div class="container mt-4">
         
     <h1>Bienvenido <?php echo htmlspecialchars($usuario['nombre_empleado'] ?? 'Usuario no encontrado') . "!!"; ?></h1>
-    <h4>Fecha: <?php echo date('d-m-Y'); ?></h4>
-    <h4>Fecha Actual: <span id="fecha_actual"></span></h4>
+    <h4>Fecha: <span id="fecha_actual"></span></h4>
     <h4>Hora: <span id="hora_actual"></span></h4>
 
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card text-white bg-warning mb-3">
-                    <div class="card-header">Pendientes</div>
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo count($pedidosPendientes); ?> Pedidos</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-info mb-3">
-                    <div class="card-header">Preparados</div>
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo count($pedidosPreparados); ?> Pedidos</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-primary mb-3">
-                    <div class="card-header">En camino</div>
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo count($pedidosEnCamino); ?> Pedidos</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-success mb-3">
-                    <div class="card-header">Entregados</div>
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo count($pedidosEntregados); ?> Pedidos</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-danger mb-3">
-                    <div class="card-header">Cancelados</div>
-                    <div class="card-body">
-                        <h5 class="card-title"><?php echo count($pedidosCancelados); ?> Pedidos</h5>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <?php include_once 'cartilla_navbar_recepcion.php'; ?>
         
-    <h3>Historial de Pedidos Recientes</h3>
+    <h3>Historial de Pedidos Recientes (cambiar por pedidos de ese mismo dia 5am a 12pm)</h3>
     <div class="table-responsive">
         <table class="table table-striped">
             <thead>
@@ -128,17 +88,18 @@ $usuario = obtenerDatosUsuario($_SESSION['id_usuario']);
             </tbody>
         </table>
     </div>
-
+    </main>
     <BR><BR>
 
     <script>
-    function fechaActual(){
+    function fechaActual() {
         const ahora = new Date();
-        const dia = ahora.getDay().toString().padStart(2, '0');
-        const mes = ahora.getMonth().toString().padStart(2, '0');
-        const ano = ahora.getYear().toString().padStart(2, '0');
-        document.getElemntById('fecha_actual').textContent = `${dia}-${mes}-${ano}`;
-    }    
+        const dia = ahora.getDate().toString().padStart(2, '0'); 
+        const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
+        const ano = ahora.getFullYear().toString();
+        document.getElementById('fecha_actual').textContent = `${dia}-${mes}-${ano}`;
+    }
+    fechaActual();
     function actualizarHora() {
         const ahora = new Date();
         const hora = ahora.getHours().toString().padStart(2, '0');

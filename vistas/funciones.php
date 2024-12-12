@@ -1,6 +1,6 @@
 <?php
-
-function obtenerConexion() {
+function obtenerConexion()
+{
     $host = "localhost";
     $dbname = "diegogas";
     $username = "root";
@@ -11,20 +11,37 @@ function obtenerConexion() {
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return $conn;
     } catch (PDOException $e) {
-        echo "Conexión fallida: " . $e->getMessage();
+        logError($e->getMessage());
+        echo "Ocurrió un error en la conexión. Por favor, intente más tarde.";
+
         return null;
     }
 }
 
+function logError($error_message)
+{
+    // Ruta donde se guardará el archivo de log
+    $log_file = '/ruta/a/tu/directorio/logs/error_log.txt';
+    // Fecha y hora del error
+    $fecha_hora = date('Y-m-d H:i:s');
+    // Mensaje completo del error
+    $log_message = "[$fecha_hora] - $error_message\n";
+    // Escribir el mensaje en el archivo de log
+    file_put_contents($log_file, $log_message, FILE_APPEND);
+}
 
-function obtenerClientes($busqueda = null) {
+function obtenerClientes($busqueda = null)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
     $parametros = [];
-    $sentencia = "SELECT * FROM clientes";
+    $sentencia = "SELECT c.id_cliente, c.nombre_cliente, c.descripcion_cliente, c.dni_cliente, c.email_cliente, t.telefono 
+                  FROM clientes c
+                  LEFT JOIN telefonos_cliente t ON c.id_cliente = t.id_cliente";
+
     if ($busqueda) {
-        $sentencia .= " WHERE nombre_cliente LIKE ? OR dni_cliente LIKE ? OR email_cliente LIKE ?";
+        $sentencia .= " WHERE c.nombre_cliente LIKE ? OR c.dni_cliente LIKE ? OR t.telefono LIKE ?";
         $parametros[] = "%$busqueda%";
         $parametros[] = "%$busqueda%";
         $parametros[] = "%$busqueda%";
@@ -40,41 +57,66 @@ function obtenerClientes($busqueda = null) {
     }
 }
 
-
-function select($sentencia, $parametros = []) {
+function select($sentencia, $parametros = [])
+{
     $conn = obtenerConexion();
     if (!$conn) {
-        return []; 
+        return [];
     }
-
     try {
-        $stmt = $conn->prepare($sentencia); 
+        $stmt = $conn->prepare($sentencia);
         $stmt->execute($parametros);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC); 
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         echo "Error en la consulta: " . $e->getMessage();
         return [];
     }
 }
 
-function agregarCliente($nombre, $apellido = null, $dni_cliente = null, $email = null, $descripcion = null) {
+function agregarCliente($nombre, $apellido = null, $dni_cliente = null, $email = null, $descripcion = null, $telefono = null, $direccion = null)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
     try {
+        $conn->beginTransaction();
+
         $stmt = $conn->prepare("
             INSERT INTO clientes (nombre_cliente, apellido_cliente, dni_cliente, email_cliente, descripcion_cliente, fecha_registro_cliente) 
             VALUES (?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([$nombre, $apellido, $dni_cliente, $email, $descripcion]);
-        return $conn->lastInsertId(); // Retorna el ID del cliente insertado
+        $id_cliente = $conn->lastInsertId();
+
+        if ($telefono) {
+            $stmtTelefono = $conn->prepare("
+                INSERT INTO telefonos_cliente (id_cliente, telefono, es_principal) 
+                VALUES (?, ?, 1)
+            ");
+            $stmtTelefono->execute([$id_cliente, $telefono]);
+        }
+
+        if ($direccion) {
+            $stmtDireccion = $conn->prepare("
+                INSERT INTO direcciones_cliente (id_cliente, direccion, es_principal) 
+                VALUES (?, ?, 1)
+            ");
+            $stmtDireccion->execute([$id_cliente, $direccion]);
+        }
+
+        $conn->commit();
+        return $id_cliente; 
     } catch (PDOException $e) {
+        $conn->rollBack();
         echo "Error al agregar cliente: " . $e->getMessage();
         return false;
     }
 }
 
-function actualizarCliente($id_cliente, $nombre, $apellido = null, $email = null, $descripcion = null, $dni_cliente = null) {
+
+
+function actualizarCliente($id_cliente, $nombre, $apellido = null, $email = null, $descripcion = null, $dni_cliente = null)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -106,23 +148,66 @@ function actualizarCliente($id_cliente, $nombre, $apellido = null, $email = null
     }
 }
 
-function obtenerClientesConTelefonoPrincipal($busqueda = null) {
+function obtenerClientesConDetalles($busqueda = '')
+{
+    $conn = obtenerConexion();
+    if (!$conn) return [];
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT c.id_cliente, c.nombre_cliente, c.descripcion_cliente
+            FROM clientes c
+            WHERE c.nombre_cliente LIKE ? OR c.descripcion_cliente LIKE ?
+            GROUP BY c.id_cliente
+        ");
+        $stmt->execute(['%' . $busqueda . '%', '%' . $busqueda . '%']);
+        $clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($clientes as &$cliente) {
+            $cliente['telefonos'] = obtenerTelefonosCliente($cliente['id_cliente']);
+            $cliente['direcciones'] = obtenerDireccionesCliente($cliente['id_cliente']);
+        }
+
+        return $clientes;
+    } catch (PDOException $e) {
+        echo "Error al obtener clientes: " . $e->getMessage();
+        return [];
+    }
+}
+
+function obtenerClientesConTelefonoPrincipal($busqueda = null)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
     $parametros = [];
     $query = "
-        SELECT c.id_cliente, c.nombre_cliente, c.apellido_cliente, c.dni_cliente, c.email_cliente, 
-               c.descripcion_cliente, c.fecha_registro_cliente, t.telefono AS telefono_principal
+        SELECT 
+            c.id_cliente, 
+            c.nombre_cliente, 
+            c.apellido_cliente, 
+            c.dni_cliente, 
+            c.email_cliente, 
+            c.descripcion_cliente, 
+            c.fecha_registro_cliente, 
+            (SELECT direccion 
+             FROM direcciones_cliente 
+             WHERE id_cliente = c.id_cliente AND es_principal = 1 
+             LIMIT 1) AS direccion_principal, 
+            (SELECT telefono 
+             FROM telefonos_cliente 
+             WHERE id_cliente = c.id_cliente AND es_principal = 1 
+             LIMIT 1) AS telefono_principal
         FROM clientes c
-        LEFT JOIN telefonos_cliente t ON c.id_cliente = t.id_cliente AND t.es_principal = 1
     ";
 
     if ($busqueda) {
-        $query .= " WHERE c.nombre_cliente LIKE ? OR t.telefono LIKE ? OR c.dni_cliente LIKE ?";
-        $parametros[] = "%$busqueda%";
-        $parametros[] = "%$busqueda%";
-        $parametros[] = "%$busqueda%";
+        $query .= " WHERE c.nombre_cliente LIKE :busqueda 
+                    OR c.dni_cliente LIKE :busqueda 
+                    OR c.email_cliente LIKE :busqueda 
+                    OR (SELECT telefono FROM telefonos_cliente WHERE id_cliente = c.id_cliente AND es_principal = 1 LIMIT 1) LIKE :busqueda 
+                    OR (SELECT direccion FROM direcciones_cliente WHERE id_cliente = c.id_cliente AND es_principal = 1 LIMIT 1) LIKE :busqueda";
+        $parametros[':busqueda'] = "%$busqueda%";
     }
 
     try {
@@ -130,22 +215,38 @@ function obtenerClientesConTelefonoPrincipal($busqueda = null) {
         $stmt->execute($parametros);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        echo "Error al obtener clientes con teléfono principal: " . $e->getMessage();
+        error_log("Error al obtener clientes con datos principales: " . $e->getMessage());
         return [];
     }
 }
 
-function agregarTelefonoCliente($id_cliente, $telefono, $es_principal = false) {
+
+
+function verificarDniDuplicado($dni)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT COUNT(*) FROM clientes WHERE dni_cliente = :dni_cliente";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':dni_cliente', $dni);
+    $stmt->execute();
+    return $stmt->fetchColumn() > 0;
+}
+
+function agregarTelefonoCliente($id_cliente, $telefono, $es_principal = false)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
     try {
+        // Si es un teléfono principal, desmarcar el actual
         if ($es_principal) {
             $stmt = $conn->prepare("UPDATE telefonos_cliente SET es_principal = 0 WHERE id_cliente = ?");
             $stmt->execute([$id_cliente]);
         }
 
-        $stmt = $conn->prepare("INSERT INTO telefonos_cliente (id_cliente, telefono, es_principal) VALUES (?, ?, ?)");
+        // Insertar el nuevo teléfono
+        $stmt = $conn->prepare("INSERT INTO telefonos_cliente (id_cliente, telefono, es_principal)
+                               VALUES (?, ?, ?)");
         return $stmt->execute([$id_cliente, $telefono, $es_principal]);
     } catch (PDOException $e) {
         echo "Error al agregar teléfono: " . $e->getMessage();
@@ -153,7 +254,8 @@ function agregarTelefonoCliente($id_cliente, $telefono, $es_principal = false) {
     }
 }
 
-function actualizarTelefonoCliente($id_telefono, $telefono, $es_principal = false) {
+function actualizarTelefonoCliente($id_telefono, $telefono, $es_principal = false)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -171,7 +273,8 @@ function actualizarTelefonoCliente($id_telefono, $telefono, $es_principal = fals
     }
 }
 
-function actualizarTelefonoPrincipal($id_cliente, $nuevo_telefono) {
+function actualizarTelefonoPrincipal($id_cliente, $nuevo_telefono)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -221,7 +324,8 @@ function actualizarTelefonoPrincipal($id_cliente, $nuevo_telefono) {
     }
 }
 
-function eliminarTelefonoCliente($id_telefono) {
+function eliminarTelefonoCliente($id_telefono)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -234,7 +338,8 @@ function eliminarTelefonoCliente($id_telefono) {
     }
 }
 
-function eliminarCliente($id_cliente) {
+function eliminarCliente($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -252,12 +357,17 @@ function eliminarCliente($id_cliente) {
     }
 }
 
-
-function obtenerDireccionesCliente($id_cliente) {
+function obtenerDireccionesCliente($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
+
     try {
-        $stmt = $conn->prepare("SELECT id_direccion, direccion, coordenadas, descripcion, es_principal FROM direcciones_cliente WHERE id_cliente = ?");
+        $stmt = $conn->prepare("
+            SELECT direccion_cliente 
+            FROM direcciones_cliente
+            WHERE id_cliente = ?
+        ");
         $stmt->execute([$id_cliente]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
@@ -266,7 +376,8 @@ function obtenerDireccionesCliente($id_cliente) {
     }
 }
 
-function obtenerProductos($busqueda = null) {
+function obtenerProductos($busqueda = null, $categoria = null, $subcategoria = null, $ordenar_por_precio = null)
+{
     $conn = obtenerConexion();
     if (!$conn) {
         return [];
@@ -278,11 +389,29 @@ function obtenerProductos($busqueda = null) {
                   JOIN subcategorias s ON p.id_subcategoria = s.id_subcategoria
                   JOIN categorias c ON s.id_categoria = c.id_categoria";
 
+    // Filtros de búsqueda
     if (isset($busqueda) && $busqueda !== '') {
         $sentencia .= " WHERE p.nombre_producto LIKE ? OR s.nombre_subcategoria LIKE ? OR c.nombre_categoria LIKE ?";
         $parametros[] = "%$busqueda%";
         $parametros[] = "%$busqueda%";
         $parametros[] = "%$busqueda%";
+    }
+
+    // Filtro de categoría
+    if (isset($categoria) && $categoria !== '') {
+        $sentencia .= " AND c.nombre_categoria = ?";
+        $parametros[] = $categoria;
+    }
+
+    // Filtro de subcategoría
+    if (isset($subcategoria) && $subcategoria !== '') {
+        $sentencia .= " AND s.nombre_subcategoria = ?";
+        $parametros[] = $subcategoria;
+    }
+
+    // Ordenar por precio
+    if (isset($ordenar_por_precio) && $ordenar_por_precio !== '') {
+        $sentencia .= " ORDER BY p.precio_venta $ordenar_por_precio";
     }
 
     try {
@@ -295,22 +424,25 @@ function obtenerProductos($busqueda = null) {
     }
 }
 
-function actualizarProducto($id, $nombre, $precio_venta, $existencias, $id_subcategoria, $id_proveedor) {
+
+function actualizarProducto($id, $precio_venta)
+{
     $conn = obtenerConexion();
     if (!$conn) {
         return false;
     }
 
     try {
-        $stmt = $conn->prepare("UPDATE productos SET nombre_producto = ?, precio_venta = ?, existencias = ?, id_subcategoria = ?, id_proveedor = ? WHERE id_producto = ?");
-        return $stmt->execute([$nombre, $precio_venta, $existencias, $id_subcategoria, $id_proveedor, $id]);
+        $stmt = $conn->prepare("UPDATE productos SET precio_venta = ? WHERE id_producto = ?");
+        return $stmt->execute([$precio_venta, $id]);
     } catch (PDOException $e) {
         echo "Error al actualizar producto: " . $e->getMessage();
         return false;
     }
 }
 
-function eliminarProducto($id) {
+function eliminarProducto($id)
+{
     $conn = obtenerConexion();
     if (!$conn) {
         return false;
@@ -325,12 +457,16 @@ function eliminarProducto($id) {
     }
 }
 
-function obtenerSubcategorias() {
+function obtenerSubcategorias()
+{
     $conn = obtenerConexion();
-    if (!$conn) return [];
+    if (!$conn) {
+        return [];
+    }
 
+    $sql = "SELECT * FROM subcategorias";
     try {
-        $stmt = $conn->prepare("SELECT id_subcategoria, nombre_subcategoria FROM subcategorias");
+        $stmt = $conn->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
@@ -339,12 +475,34 @@ function obtenerSubcategorias() {
     }
 }
 
-function obtenerProveedores() {
+function obtenerCategorias()
+{
     $conn = obtenerConexion();
-    if (!$conn) return [];
+    if (!$conn) {
+        return [];
+    }
 
+    $sql = "SELECT * FROM categorias";
     try {
-        $stmt = $conn->prepare("SELECT id_proveedor, nombre_proveedor FROM proveedores");
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al obtener categorías: " . $e->getMessage();
+        return [];
+    }
+}
+
+function obtenerProveedores()
+{
+    $conn = obtenerConexion();
+    if (!$conn) {
+        return [];
+    }
+
+    $sql = "SELECT * FROM proveedores";
+    try {
+        $stmt = $conn->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
@@ -353,7 +511,8 @@ function obtenerProveedores() {
     }
 }
 
-function obtenerProductosConDetalles($busqueda = null) {
+function obtenerProductosConDetalles($busqueda = null)
+{
     $conn = obtenerConexion();
     if (!$conn) {
         return [];
@@ -385,29 +544,46 @@ function obtenerProductosConDetalles($busqueda = null) {
 }
 
 
-function agregarReabastecimiento($id_proveedor, $fecha_reabastecimiento, $total_reabastecimiento, $id_usuario) {
+function agregarReabastecimiento($id_proveedor, $fecha_reabastecimiento, $total_reabastecimiento, $id_usuario)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
     try {
         $stmt = $conn->prepare("INSERT INTO reabastecimientos (id_proveedor, fecha_reabastecimiento, total_reabastecimiento, id_usuario) VALUES (?, ?, ?, ?)");
         $stmt->execute([$id_proveedor, $fecha_reabastecimiento, $total_reabastecimiento, $id_usuario]);
-        return $conn->lastInsertId(); 
+        return $conn->lastInsertId();
     } catch (PDOException $e) {
         echo "Error al agregar reabastecimiento: " . $e->getMessage();
         return false;
     }
 }
 
-function agregarDireccionCliente($id_cliente, $direccion, $coordenadas = null, $descripcion = null, $es_principal = false) {
+function seleccionarCliente($id_cliente)
+{
+    $cliente = [];
+    $cliente['id_cliente'] = $id_cliente;
+    $cliente['telefonos'] = obtenerTelefonosCliente($id_cliente);
+    $cliente['direcciones'] = obtenerDireccionesCliente($id_cliente);
+
+    return $cliente;
+}
+
+function agregarDireccionCliente($id_cliente, $direccion, $coordenadas = null, $descripcion = null, $es_principal = false)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
+
     try {
+        // Si es una dirección principal, desmarcar las demás direcciones del cliente
         if ($es_principal) {
             $stmt = $conn->prepare("UPDATE direcciones_cliente SET es_principal = 0 WHERE id_cliente = ?");
             $stmt->execute([$id_cliente]);
         }
-        $stmt = $conn->prepare("INSERT INTO direcciones_cliente (id_cliente, direccion, coordenadas, descripcion, es_principal) VALUES (?, ?, ?, ?, ?)");
+
+        // Insertar la nueva dirección
+        $stmt = $conn->prepare("INSERT INTO direcciones_cliente (id_cliente, direccion_cliente, coordenadas, descripcion, es_principal)
+                               VALUES (?, ?, ?, ?, ?)");
         return $stmt->execute([$id_cliente, $direccion, $coordenadas, $descripcion, $es_principal]);
     } catch (PDOException $e) {
         echo "Error al agregar dirección: " . $e->getMessage();
@@ -415,7 +591,8 @@ function agregarDireccionCliente($id_cliente, $direccion, $coordenadas = null, $
     }
 }
 
-function agregarDetalleReabastecimiento($id_reabastecimiento, $id_producto, $cantidad, $precio_compra) {
+function agregarDetalleReabastecimiento($id_reabastecimiento, $id_producto, $cantidad, $precio_compra)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -430,7 +607,8 @@ function agregarDetalleReabastecimiento($id_reabastecimiento, $id_producto, $can
     }
 }
 
-function obtenerReabastecimientosConDetalles() {
+function obtenerReabastecimientosConDetalles()
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
@@ -445,7 +623,7 @@ function obtenerReabastecimientosConDetalles() {
             JOIN productos prod ON dr.id_producto = prod.id_producto
             ORDER BY r.fecha_reabastecimiento DESC
         ");
-        
+
         $reabastecimientos = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $id_reabastecimiento = $row['id_reabastecimiento'];
@@ -472,7 +650,8 @@ function obtenerReabastecimientosConDetalles() {
     }
 }
 
-function actualizarExistenciasProducto($id_producto, $cantidad_reabastecida) {
+function actualizarExistenciasProducto($id_producto, $cantidad_reabastecida)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -485,7 +664,8 @@ function actualizarExistenciasProducto($id_producto, $cantidad_reabastecida) {
     }
 }
 
-function obtenerStockPorPeso($peso) {
+function obtenerStockPorPeso($peso)
+{
     $conn = obtenerConexion();
     if (!$conn) return 0;
 
@@ -507,7 +687,8 @@ function obtenerStockPorPeso($peso) {
 
 
 
-function obtenerStockAccesorios($tipo) {
+function obtenerStockAccesorios($tipo)
+{
     $conn = obtenerConexion();
     if (!$conn) return 0;
 
@@ -528,7 +709,8 @@ function obtenerStockAccesorios($tipo) {
 }
 
 
-function obtenerTotalProductos() {
+function obtenerTotalProductos()
+{
     $conn = obtenerConexion();
     if (!$conn) return 0;
 
@@ -542,12 +724,13 @@ function obtenerTotalProductos() {
     }
 }
 
-function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho) {
+function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
     try {
         $stmt = $conn->prepare("INSERT INTO pedidos (id_cliente, id_usuario, fecha_pedido, total_pedido, id_estado, id_pago, id_tipo_despacho) VALUES (?, ?, NOW(), ?, ?, ?, ?)");
-        $stmt->execute([$id_cliente, $id_usuario, $total_pedido, 2, $id_pago, $id_despacho]);
+        $stmt->execute([$id_cliente, $id_usuario, $total_pedido, 1, $id_pago, $id_despacho]);
         return $conn->lastInsertId();
     } catch (PDOException $e) {
         echo "Error al crear pedido: " . $e->getMessage();
@@ -555,7 +738,8 @@ function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_desp
     }
 }
 
-function obtenerHistorialComprasCliente($id_cliente) {
+function obtenerHistorialComprasCliente($id_cliente)
+{
     $conn = obtenerConexion();
     $sql = "SELECT p.id_pedido, p.fecha_pedido, p.total_pedido, ep.descripcion_estado AS estado
             FROM pedidos p
@@ -568,7 +752,8 @@ function obtenerHistorialComprasCliente($id_cliente) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function actualizarDireccionCliente($id_direccion, $direccion, $coordenadas = null, $descripcion = null, $es_principal = false) {
+function actualizarDireccionCliente($id_direccion, $direccion, $coordenadas = null, $descripcion = null, $es_principal = false)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
     try {
@@ -584,7 +769,8 @@ function actualizarDireccionCliente($id_direccion, $direccion, $coordenadas = nu
     }
 }
 
-function eliminarDireccionCliente($id_direccion) {
+function eliminarDireccionCliente($id_direccion)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -597,10 +783,11 @@ function eliminarDireccionCliente($id_direccion) {
     }
 }
 
-function actualizarDescripcionCliente($id_cliente, $nueva_descripcion) {
+function actualizarDescripcionCliente($id_cliente, $nueva_descripcion)
+{
     $conexion = obtenerConexion();
     if (!$conexion) {
-        return false; 
+        return false;
     }
     try {
         $sql = "UPDATE clientes SET descripcion_cliente = :descripcion WHERE id_cliente = :id_cliente";
@@ -616,7 +803,8 @@ function actualizarDescripcionCliente($id_cliente, $nueva_descripcion) {
 }
 
 
-function establecerDireccionPrincipal($id_cliente, $id_direccion) {
+function establecerDireccionPrincipal($id_cliente, $id_direccion)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -637,7 +825,31 @@ function establecerDireccionPrincipal($id_cliente, $id_direccion) {
     }
 }
 
-function obtenerHistorialCliente($id_cliente) {
+function obtenerClienteConDetalles($id_cliente)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return [];
+    try {
+        $query = "
+            SELECT c.id_cliente, c.nombre_cliente, c.descripcion_cliente, c.dni_cliente, c.email_cliente, 
+                   t.telefono, t.es_principal
+            FROM clientes c
+            LEFT JOIN telefonos_cliente t ON c.id_cliente = t.id_cliente
+            WHERE c.id_cliente = :id_cliente
+        ";
+        $stmt = $conn->prepare($query);
+        $stmt->execute(['id_cliente' => $id_cliente]);
+        $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
+        $direcciones = obtenerDireccionesCliente($id_cliente);
+        return ['cliente' => $cliente, 'direcciones' => $direcciones];
+    } catch (PDOException $e) {
+        echo "Error al obtener el cliente: " . $e->getMessage();
+        return [];
+    }
+}
+
+function obtenerHistorialCliente($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
     try {
@@ -657,7 +869,8 @@ function obtenerHistorialCliente($id_cliente) {
     }
 }
 
-function obtenerClientePorId($id_cliente) {
+function obtenerClientePorId($id_cliente)
+{
     $conn = obtenerConexion();
     $sql = "SELECT * FROM clientes WHERE id_cliente = :id_cliente";
     $stmt = $conn->prepare($sql);
@@ -666,7 +879,27 @@ function obtenerClientePorId($id_cliente) {
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-function obtenerTelefonosPorCliente($id_cliente) {
+function obtenerTelefonosCliente($id_cliente)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return [];
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT telefono, es_principal 
+            FROM telefonos_cliente
+            WHERE id_cliente = ?
+        ");
+        $stmt->execute([$id_cliente]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al obtener teléfonos: " . $e->getMessage();
+        return [];
+    }
+}
+
+function obtenerTelefonosPorCliente($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
@@ -680,7 +913,8 @@ function obtenerTelefonosPorCliente($id_cliente) {
     }
 }
 
-function obtenerTelefonoPrincipal($id_cliente) {
+function obtenerTelefonoPrincipal($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return null;
 
@@ -700,7 +934,8 @@ function obtenerTelefonoPrincipal($id_cliente) {
     }
 }
 
-function obtenerDireccionesPorCliente($id_cliente) {
+function obtenerDireccionesPorCliente($id_cliente)
+{
     $conn = obtenerConexion();
     $sql = "SELECT * FROM direcciones_cliente WHERE id_cliente = :id_cliente";
     $stmt = $conn->prepare($sql);
@@ -709,7 +944,8 @@ function obtenerDireccionesPorCliente($id_cliente) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta) {
+function agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta)
+{
     $conn = obtenerConexion();
     if (!$conn) return false;
 
@@ -724,21 +960,31 @@ function agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta
 }
 
 
-function actualizarEstadoPedido($id_pedido, $id_estado, $id_empleado = null) {
+function actualizarEstadoPedido($id_pedido, $id_estado, $id_empleado = null)
+{
     $conexion = obtenerConexion();
 
     try {
         // Iniciar transacción
         $conexion->beginTransaction();
 
-        // Actualizar el estado del pedido en la tabla 'pedidos'
+        $sqlVerificarEmpleado = "SELECT id_empleado FROM historial_estado_pedidos 
+                                 WHERE id_pedido = :id_pedido ORDER BY fecha_cambio DESC LIMIT 1";
+        $stmtVerificarEmpleado = $conexion->prepare($sqlVerificarEmpleado);
+        $stmtVerificarEmpleado->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
+        $stmtVerificarEmpleado->execute();
+        $empleadoExistente = $stmtVerificarEmpleado->fetch(PDO::FETCH_ASSOC);
+
+        if ($empleadoExistente && !empty($empleadoExistente['id_empleado'])) {
+            $id_empleado = $empleadoExistente['id_empleado'];
+        }
+
         $sql = "UPDATE pedidos SET id_estado = :id_estado WHERE id_pedido = :id_pedido";
         $stmt = $conexion->prepare($sql);
         $stmt->bindParam(':id_estado', $id_estado, PDO::PARAM_INT);
         $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
         $stmt->execute();
 
-        // Insertar el cambio de estado en 'historial_estado_pedidos'
         $sqlHistorial = "INSERT INTO historial_estado_pedidos (id_pedido, id_estado, fecha_cambio, id_empleado)
                          VALUES (:id_pedido, :id_estado, NOW(), :id_empleado)";
         $stmtHistorial = $conexion->prepare($sqlHistorial);
@@ -747,33 +993,37 @@ function actualizarEstadoPedido($id_pedido, $id_estado, $id_empleado = null) {
         $stmtHistorial->bindParam(':id_empleado', $id_empleado, PDO::PARAM_INT);
         $stmtHistorial->execute();
 
-        // Confirmar transacción
         $conexion->commit();
 
         return true;
     } catch (Exception $e) {
-        // Si ocurre un error, deshacer transacción
         $conexion->rollBack();
         echo "Error al actualizar el estado del pedido: " . $e->getMessage();
         return false;
     }
 }
 
-function obtenerHistorialEstadoPedido($id_pedido) {
-    $conexion = obtenerConexion();
-    $sql = "SELECT ep.descripcion_estado AS estado, hep.fecha_cambio, e.nombre_empleado
+
+function obtenerHistorialEstadoPedido($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT es.descripcion_estado AS estado, 
+                   hep.fecha_cambio, 
+                   e.nombre_empleado, e.apellido_empleado
             FROM historial_estado_pedidos hep
-            JOIN estado_pedido ep ON hep.id_estado = ep.id_estado
+            JOIN estado_pedido es ON hep.id_estado = es.id_estado
             LEFT JOIN empleados e ON hep.id_empleado = e.id_empleado
             WHERE hep.id_pedido = :id_pedido
             ORDER BY hep.fecha_cambio ASC";
-    $stmt = $conexion->prepare($sql);
+    $stmt = $conn->prepare($sql);
     $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function obtenerMetodosPago() {
+
+function obtenerMetodosPago()
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
@@ -786,7 +1036,8 @@ function obtenerMetodosPago() {
     }
 }
 
-function obtenerTiposDespacho() {
+function obtenerTiposDespacho()
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
@@ -799,7 +1050,8 @@ function obtenerTiposDespacho() {
     }
 }
 
-function agregarProductoSeleccionado($id_producto, $nombre, $precio_venta, $cantidad) {
+function agregarProductoSeleccionado($id_producto, $nombre, $precio_venta, $cantidad)
+{
     $subtotal = $precio_venta * $cantidad;
     $_SESSION['productos_seleccionados'][$id_producto] = [
         'nombre' => $nombre,
@@ -809,13 +1061,15 @@ function agregarProductoSeleccionado($id_producto, $nombre, $precio_venta, $cant
     ];
 }
 
-function quitarProductoSeleccionado($id_producto) {
+function quitarProductoSeleccionado($id_producto)
+{
     if (isset($_SESSION['productos_seleccionados'][$id_producto])) {
         unset($_SESSION['productos_seleccionados'][$id_producto]);
     }
 }
 
-function actualizarCantidadProducto($id_producto, $nueva_cantidad) {
+function actualizarCantidadProducto($id_producto, $nueva_cantidad)
+{
     if (isset($_SESSION['productos_seleccionados'][$id_producto])) {
         $producto = &$_SESSION['productos_seleccionados'][$id_producto];
         $producto['cantidad'] = $nueva_cantidad;
@@ -823,7 +1077,8 @@ function actualizarCantidadProducto($id_producto, $nueva_cantidad) {
     }
 }
 
-function calcularTotalPedido($productos) {
+function calcularTotalPedido($productos)
+{
     $total = 0;
     foreach ($productos as $producto) {
         $total += $producto['precio_venta'] * $producto['cantidad'];
@@ -831,8 +1086,9 @@ function calcularTotalPedido($productos) {
     return $total;
 }
 
-function descontarInventario($id_producto, $cantidad) {
-    $conn = obtenerConexion(); 
+function descontarInventario($id_producto, $cantidad)
+{
+    $conn = obtenerConexion();
     if (!$conn) {
         return false;
     }
@@ -863,7 +1119,8 @@ function descontarInventario($id_producto, $cantidad) {
     }
 }
 
-function obtenerPedidosPorEstado($estado) {
+function obtenerPedidosPorEstado($estado)
+{
     $conexion = obtenerConexion();
     $sql = "SELECT p.id_pedido, c.nombre_cliente, ep.descripcion_estado AS estado, p.total_pedido AS total, p.fecha_pedido AS fecha
             FROM pedidos p
@@ -877,7 +1134,8 @@ function obtenerPedidosPorEstado($estado) {
 }
 
 
-function obtenerHistorialPedidos($limite = 5) {
+function obtenerHistorialPedidos($limite = 5)
+{
     $conexion = obtenerConexion();
     $sql = "SELECT p.id_pedido, c.nombre_cliente, e.descripcion_estado AS estado, p.total_pedido AS total, p.fecha_pedido AS fecha
             FROM pedidos p
@@ -891,7 +1149,8 @@ function obtenerHistorialPedidos($limite = 5) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function obtenerProductosBajoInventario($limiteStock = 10) {
+function obtenerProductosBajoInventario($limiteStock = 10)
+{
     $conexion = obtenerConexion();
     $sql = "SELECT p.nombre_producto, c.nombre_categoria, p.existencias 
             FROM productos p
@@ -905,10 +1164,11 @@ function obtenerProductosBajoInventario($limiteStock = 10) {
 }
 
 
-function obtenerExistenciasProducto($id_producto) {
+function obtenerExistenciasProducto($id_producto)
+{
     $conn = obtenerConexion();
     if (!$conn) {
-        return 0; 
+        return 0;
     }
     try {
         $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = ?");
@@ -921,7 +1181,8 @@ function obtenerExistenciasProducto($id_producto) {
     }
 }
 
-function verificarContrasena($id_usuario, $contrasena_actual) {
+function verificarContrasena($id_usuario, $contrasena_actual)
+{
     $conexion = obtenerConexion();
     $sql = "SELECT password_usuario FROM usuarios WHERE id_usuario = ?";
     $stmt = $conexion->prepare($sql);
@@ -931,14 +1192,16 @@ function verificarContrasena($id_usuario, $contrasena_actual) {
     return $usuario && $usuario['password_usuario'] === $contrasena_actual;
 }
 
-function cambiarContrasena($id_usuario, $nueva_contrasena) {
+function cambiarContrasena($id_usuario, $nueva_contrasena)
+{
     $conexion = obtenerConexion();
     $sql = "UPDATE usuarios SET password_usuario = ? WHERE id_usuario = ?";
     $stmt = $conexion->prepare($sql);
     return $stmt->execute([$nueva_contrasena, $id_usuario]);
 }
 
-function obtenerDatosUsuario($id_usuario) {
+function obtenerDatosUsuario($id_usuario)
+{
     $conn = obtenerConexion(); // Obtener la conexión a la base de datos
     if (!$conn) {
         return false; // Retornar falso si no hay conexión
@@ -979,11 +1242,8 @@ function obtenerDatosUsuario($id_usuario) {
     }
 }
 
-
-
-
-
-function obtenerMotorizados() {
+function obtenerMotorizados()
+{
     $conexion = obtenerConexion();
     $sql = "SELECT e.id_empleado, e.nombre_empleado, e.apellido_empleado 
             FROM empleados e
@@ -996,7 +1256,8 @@ function obtenerMotorizados() {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function anularPedido($id_pedido) {
+function anularPedido($id_pedido)
+{
     $conexion = obtenerConexion();
     $sql = "UPDATE pedidos SET id_estado = (SELECT id_estado FROM estado_pedido WHERE descripcion_estado = 'Cancelado') WHERE id_pedido = :id_pedido";
     $stmt = $conexion->prepare($sql);
@@ -1004,7 +1265,8 @@ function anularPedido($id_pedido) {
     return $stmt->execute();
 }
 
-function revertirStock($id_pedido) {
+function revertirStock($id_pedido)
+{
     $conexion = obtenerConexion();
 
     $sql = "SELECT id_producto, cantidad FROM detalle_pedido WHERE id_pedido = :id_pedido";
@@ -1022,7 +1284,8 @@ function revertirStock($id_pedido) {
     }
 }
 
-function cancelarVenta($id_pedido) {
+function cancelarVenta($id_pedido)
+{
     if (anularPedido($id_pedido)) {
         revertirStock($id_pedido);
         return true;
@@ -1031,4 +1294,76 @@ function cancelarVenta($id_pedido) {
     }
 }
 
-?>
+function obtenerDetallesPedido($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT dp.id_detalle_pedido, p.nombre_producto, dp.cantidad, dp.precio_unitario, dp.subtotal
+            FROM detalle_pedido dp
+            JOIN productos p ON dp.id_producto = p.id_producto
+            WHERE dp.id_pedido = :id_pedido";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function obtenerProductosPorPedido($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT p.nombre_producto, dp.cantidad, dp.precio_unitario, dp.subtotal 
+            FROM detalle_pedido dp
+            JOIN productos p ON dp.id_producto = p.id_producto
+            WHERE dp.id_pedido = :id_pedido";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([':id_pedido' => $id_pedido]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function obtenerPedidoPorId($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT p.id_pedido, c.nombre_cliente, p.fecha_pedido, p.total_pedido, ep.descripcion_estado AS estado, 
+                   p.id_direccion_envio, e.nombre_empleado, e.apellido_empleado
+            FROM pedidos p
+            JOIN clientes c ON p.id_cliente = c.id_cliente
+            JOIN estado_pedido ep ON p.id_estado = ep.id_estado
+            LEFT JOIN usuarios u ON p.id_usuario = u.id_usuario  -- Unir con la tabla usuarios
+            LEFT JOIN empleados e ON u.id_empleado = e.id_empleado  -- Unir con la tabla empleados para obtener el nombre y apellido del empleado
+            WHERE p.id_pedido = :id_pedido";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function obtenerProductosDelPedido($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT * FROM detalle_pedido WHERE id_pedido = :id_pedido";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([':id_pedido' => $id_pedido]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);  // Retorna todos los productos del pedido
+}
+
+function obtenerHistorialEstados($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT * FROM historial_estado_pedidos WHERE id_pedido = :id_pedido";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([':id_pedido' => $id_pedido]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function obtenerDireccionEnvio($id_direccion_envio)
+{
+    $conn = obtenerConexion();
+
+    $sql = "SELECT d.direccion, d.coordenadas, d.descripcion
+            FROM direcciones_cliente d
+            WHERE d.id_direccion = :id_direccion_envio";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([':id_direccion_envio' => $id_direccion_envio]);
+
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
