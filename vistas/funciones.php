@@ -1149,8 +1149,7 @@ function generarNumeroBoleta()
 {
     // Generar un número único utilizando la fecha y un número aleatorio
     return 'BOL-' . date('YmdHis') . '-' . rand(1000, 9999);
-}
-
+} 
 
 function obtenerHistorialConDescripcion($id_pedido)
 {
@@ -1341,6 +1340,43 @@ function obtenerPedidosPorEstado($estado)
     $stmt->bindParam(':estado', $estado, PDO::PARAM_STR);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+function buscarHistorialPedidos($criterio, $valor)
+{
+    $conn = obtenerConexion();
+    try {
+        $sql = "SELECT p.id_pedido, c.nombre_cliente, c.dni_cliente, p.fecha_pedido, p.total_pedido, ep.nombre_estado AS estado
+                FROM pedidos p
+                JOIN clientes c ON p.id_cliente = c.id_cliente
+                JOIN estado_pedido ep ON p.id_estado = ep.id_estado";
+
+        // Agregar filtro según el criterio seleccionado
+        if (!empty($criterio) && !empty($valor)) {
+            if ($criterio === 'id_pedido') {
+                $sql .= " WHERE p.id_pedido = :valor";
+                $valor = (int)$valor;
+            } elseif ($criterio === 'dni_cliente') {
+                $sql .= " WHERE c.dni_cliente LIKE :valor";
+                $valor = "%$valor%";
+            } elseif ($criterio === 'nombre_cliente') {
+                $sql .= " WHERE c.nombre_cliente LIKE :valor";
+                $valor = "%$valor%";
+            } elseif ($criterio === 'fecha_pedido') {
+                $sql .= " WHERE DATE(p.fecha_pedido) = :valor";
+            }
+        }
+
+        $sql .= " ORDER BY p.fecha_pedido DESC";
+        $stmt = $conn->prepare($sql);
+        if (!empty($criterio) && !empty($valor)) {
+            $stmt->bindParam(':valor', $valor);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al buscar el historial de pedidos: " . $e->getMessage();
+        return [];
+    }
 }
 
 
@@ -1603,7 +1639,6 @@ function limpiarPedidosAntiguos($fechaLimite)
         return false;
     }
 }
-
 
 function obtenerDetallesPedido($id_pedido)
 {

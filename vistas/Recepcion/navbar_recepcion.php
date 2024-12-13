@@ -42,8 +42,8 @@
                                 Ventas
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownVentas">
-                                <li><a class="dropdown-item" href="../boletas.php">Boletas</a></li>
-                                <li><a class="dropdown-item" href="../historial_ventas.php">Historial de Ventas</a></li>
+                                <li><a class="dropdown-item" href="boletas.php">Boletas</a></li>
+                                <li><a class="dropdown-item" href="historial_ventas.php">Historial de Ventas</a></li>
                             </ul>
                         </li>
                         <li class="nav-item dropdown p-3 py-md-1">
