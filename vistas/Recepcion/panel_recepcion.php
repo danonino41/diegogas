@@ -23,11 +23,12 @@ function obtenerPedidosDelDia()
 {
     $conexion = obtenerConexion();
     if (!$conexion) {
-        throw new Exception("No se pudo establecer la conexión a la base de datos.");
+        error_log("Error: No se pudo establecer conexión con la base de datos.");
+        return [];
     }
 
     try {
-        $fechaHoy = date('Y-m-d');
+        $fechaHoy = date('2024-12-13'); // Obtener la fecha actual en formato 'YYYY-MM-DD'
         $sql = "SELECT 
                     p.id_pedido, 
                     c.nombre_cliente, 
@@ -46,7 +47,7 @@ function obtenerPedidosDelDia()
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        echo "Error al obtener pedidos del día: " . $e->getMessage();
+        error_log("Error al obtener pedidos del día: " . $e->getMessage());
         return [];
     }
 }

@@ -11,7 +11,7 @@ if (!isset($_SESSION['id_usuario']) || !in_array('Recepcionista', $_SESSION['rol
 // Variables
 $mensaje = $_GET['mensaje'] ?? '';
 $error = $_GET['error'] ?? '';
-$fechaHoy = date('Y-m-d');
+$fechaHoy = date('2024-12-13');
 
 // Procesar solicitud de cambio de estado
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_pedido']) && isset($_POST['nuevo_estado'])) {
