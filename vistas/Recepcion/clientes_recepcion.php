@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_dni'])) {
 
         <!-- Mensaje -->
         <?php if ($mensaje): ?>
-            <div class="alert alert-danger" id="alertaDNI">
+            <div class="alert alert-info" id="alertaDNI">
                 <?php echo $mensaje; ?>
             </div>
         <?php endif; ?>
@@ -86,6 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_dni'])) {
             </div>
         </form>
 
+        <?php if (empty($clientes) && !empty($busqueda)): ?>
+            <div class="alert alert-warning">
+                No se encontraron clientes con el criterio de búsqueda: "<?php echo htmlspecialchars($busqueda); ?>".
+            </div>
+        <?php endif; ?>
+        
         <!-- Botón para agregar cliente -->
         <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalAgregarEditar">
             <i class="fas fa-plus"></i> Agregar Cliente
@@ -116,12 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_dni'])) {
                             <?php foreach ($clientes as $cliente): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($cliente['nombre_cliente']); ?></td>
-                                    <td><?php echo !empty($cliente['apellido_cliente'])? htmlspecialchars($cliente['apellido_cliente']): 'No registrado';
+                                    <td><?php echo !empty($cliente['apellido_cliente']) ? htmlspecialchars($cliente['apellido_cliente']) : 'No registrado';
                                         ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($cliente['dni_cliente'] ?? 'No registrado'); ?></td>
                                     <td><?php echo htmlspecialchars($cliente['telefono_principal'] ?? 'Sin teléfono'); ?></td>
-                                    <td><?php echo !empty($cliente['email_cliente'])? htmlspecialchars($cliente['email_cliente']): 'No registrado';
+                                    <td><?php echo !empty($cliente['email_cliente']) ? htmlspecialchars($cliente['email_cliente']) : 'No registrado';
                                         ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($cliente['direccion_principal'] ?? 'No registrado'); ?></td>

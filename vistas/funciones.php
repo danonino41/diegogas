@@ -148,31 +148,32 @@ function actualizarCliente($id_cliente, $nombre, $apellido = null, $email = null
     }
 }
 
-function obtenerClientesConDetalles($busqueda = '')
-{
+function obtenerClientesConDetalles($busqueda) {
     $conn = obtenerConexion();
     if (!$conn) return [];
 
-    try {
-        $stmt = $conn->prepare("
-            SELECT c.id_cliente, c.nombre_cliente, c.descripcion_cliente
-            FROM clientes c
-            WHERE c.nombre_cliente LIKE ? OR c.descripcion_cliente LIKE ?
-            GROUP BY c.id_cliente
-        ");
-        $stmt->execute(['%' . $busqueda . '%', '%' . $busqueda . '%']);
-        $clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        foreach ($clientes as &$cliente) {
-            $cliente['telefonos'] = obtenerTelefonosCliente($cliente['id_cliente']);
-            $cliente['direcciones'] = obtenerDireccionesCliente($cliente['id_cliente']);
-        }
-
-        return $clientes;
-    } catch (PDOException $e) {
-        echo "Error al obtener clientes: " . $e->getMessage();
-        return [];
-    }
+    $query = "
+        SELECT 
+            c.id_cliente, 
+            c.nombre_cliente, 
+            c.apellido_cliente, 
+            c.dni_cliente, 
+            c.email_cliente,
+            t.telefono AS telefono_principal, 
+            d.direccion AS direccion_principal
+        FROM clientes c
+        LEFT JOIN telefonos_cliente t 
+            ON c.id_cliente = t.id_cliente AND t.es_principal = 1
+        LEFT JOIN direcciones_cliente d 
+            ON c.id_cliente = d.id_cliente AND d.es_principal = 1
+        WHERE c.nombre_cliente LIKE :busqueda 
+           OR c.apellido_cliente LIKE :busqueda
+           OR c.dni_cliente LIKE :busqueda
+           OR t.telefono LIKE :busqueda
+    ";
+    $stmt = $conn->prepare($query);
+    $stmt->execute([':busqueda' => "%$busqueda%"]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function obtenerClientesConTelefonoPrincipal($busqueda = null)
@@ -219,8 +220,6 @@ function obtenerClientesConTelefonoPrincipal($busqueda = null)
         return [];
     }
 }
-
-
 
 function verificarDniDuplicado($dni)
 {
@@ -724,19 +723,24 @@ function obtenerTotalProductos()
     }
 }
 
-function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho)
+function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho, $id_direccion_envio)
 {
     $conn = obtenerConexion();
     if (!$conn) return false;
+
     try {
-        $stmt = $conn->prepare("INSERT INTO pedidos (id_cliente, id_usuario, fecha_pedido, total_pedido, id_estado, id_pago, id_tipo_despacho) VALUES (?, ?, NOW(), ?, ?, ?, ?)");
-        $stmt->execute([$id_cliente, $id_usuario, $total_pedido, 1, $id_pago, $id_despacho]);
-        return $conn->lastInsertId();
+        $stmt = $conn->prepare("
+            INSERT INTO pedidos (id_cliente, id_usuario, fecha_pedido, total_pedido, id_estado, id_pago, id_tipo_despacho, id_direccion_envio) 
+            VALUES (?, ?, NOW(), ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$id_cliente, $id_usuario, $total_pedido, 1, $id_pago, $id_despacho, $id_direccion_envio]);
+        return $conn->lastInsertId(); // Devuelve el ID del pedido recién creado
     } catch (PDOException $e) {
         echo "Error al crear pedido: " . $e->getMessage();
         return false;
     }
 }
+
 
 function obtenerHistorialComprasCliente($id_cliente)
 {
@@ -869,14 +873,46 @@ function obtenerHistorialCliente($id_cliente)
     }
 }
 
-function obtenerClientePorId($id_cliente)
-{
+function obtenerClientePorId($id_cliente) {
     $conn = obtenerConexion();
-    $sql = "SELECT * FROM clientes WHERE id_cliente = :id_cliente";
-    $stmt = $conn->prepare($sql);
-    $stmt->bindParam(':id_cliente', $id_cliente, PDO::PARAM_INT);
-    $stmt->execute();
-    return $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$conn) return null;
+
+    $cliente = null;
+
+    try {
+        // Obtener detalles principales del cliente
+        $stmtCliente = $conn->prepare("
+            SELECT 
+                c.id_cliente, 
+                c.nombre_cliente, 
+                c.apellido_cliente, 
+                c.dni_cliente, 
+                c.email_cliente,
+                c.descripcion_cliente, -- Agregado: descripción del cliente
+                t.telefono AS telefono_principal, 
+                d.direccion AS direccion_principal
+            FROM clientes c
+            LEFT JOIN telefonos_cliente t 
+                ON c.id_cliente = t.id_cliente AND t.es_principal = 1
+            LEFT JOIN direcciones_cliente d 
+                ON c.id_cliente = d.id_cliente AND d.es_principal = 1
+            WHERE c.id_cliente = :id_cliente
+        ");
+        $stmtCliente->execute([':id_cliente' => $id_cliente]);
+        $cliente = $stmtCliente->fetch(PDO::FETCH_ASSOC);
+
+        if ($cliente) {
+            // Obtener todas las direcciones del cliente
+            $cliente['direcciones'] = obtenerDireccionesPorCliente($id_cliente);
+
+            // Obtener todos los teléfonos del cliente
+            $cliente['telefonos'] = obtenerTelefonosPorCliente($id_cliente);
+        }
+    } catch (PDOException $e) {
+        error_log("Error al obtener cliente por ID: " . $e->getMessage());
+    }
+
+    return $cliente;
 }
 
 function obtenerTelefonosCliente($id_cliente)
@@ -1090,34 +1126,47 @@ function descontarInventario($id_producto, $cantidad)
 {
     $conn = obtenerConexion();
     if (!$conn) {
-        return false;
+        return false; // No hay conexión a la base de datos
     }
 
     try {
+        // Verificar existencias actuales
         $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = :id_producto");
         $stmt->bindParam(':id_producto', $id_producto, PDO::PARAM_INT);
         $stmt->execute();
         $producto = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$producto) {
-            throw new Exception("Producto no encontrado.");
+            throw new Exception("Producto con ID $id_producto no encontrado.");
         }
 
+        // Validar si la cantidad disponible es suficiente
         if ($producto['existencias'] < $cantidad) {
-            throw new Exception("Cantidad insuficiente en el inventario para realizar el descuento.");
+            throw new Exception("Cantidad insuficiente en el inventario para el producto con ID $id_producto.");
         }
 
-        $sql = "UPDATE productos SET existencias = existencias - :cantidad WHERE id_producto = :id_producto";
-        $stmt = $conn->prepare($sql);
+        // Descontar existencias
+        $stmt = $conn->prepare("
+            UPDATE productos 
+            SET existencias = existencias - :cantidad 
+            WHERE id_producto = :id_producto
+        ");
         $stmt->bindParam(':cantidad', $cantidad, PDO::PARAM_INT);
         $stmt->bindParam(':id_producto', $id_producto, PDO::PARAM_INT);
 
-        return $stmt->execute();
+        if ($stmt->execute()) {
+            return true; // Descuento exitoso
+        } else {
+            throw new Exception("No se pudo actualizar el inventario para el producto con ID $id_producto.");
+        }
     } catch (Exception $e) {
+        // Manejo de errores
+        error_log("Error al descontar inventario: " . $e->getMessage());
         echo "Error al descontar inventario: " . $e->getMessage();
         return false;
     }
 }
+
 
 function obtenerPedidosPorEstado($estado)
 {
@@ -1178,6 +1227,28 @@ function obtenerExistenciasProducto($id_producto)
     } catch (PDOException $e) {
         echo "Error al obtener existencias del producto: " . $e->getMessage();
         return 0;
+    }
+}
+
+function verificarStockDisponible($productosSeleccionados)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return false;
+
+    try {
+        foreach ($productosSeleccionados as $producto) {
+            $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = ?");
+            $stmt->execute([$producto['id_producto']]);
+            $existencias = $stmt->fetchColumn();
+
+            if ($producto['cantidad'] > $existencias) {
+                return "Stock insuficiente para el producto: " . htmlspecialchars($producto['nombre']);
+            }
+        }
+        return true; // Todo el stock está disponible
+    } catch (PDOException $e) {
+        echo "Error al verificar inventario: " . $e->getMessage();
+        return false;
     }
 }
 
