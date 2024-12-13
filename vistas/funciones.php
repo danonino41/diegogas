@@ -1327,20 +1327,37 @@ function descontarInventario($id_producto, $cantidad)
     }
 }
 
-
 function obtenerPedidosPorEstado($estado)
 {
     $conexion = obtenerConexion();
-    $sql = "SELECT p.id_pedido, c.nombre_cliente, ep.descripcion_estado AS estado, p.total_pedido AS total, p.fecha_pedido AS fecha
-            FROM pedidos p
-            JOIN clientes c ON p.id_cliente = c.id_cliente
-            JOIN estado_pedido ep ON p.id_estado = ep.id_estado
-            WHERE ep.descripcion_estado = :estado";
-    $stmt = $conexion->prepare($sql);
-    $stmt->bindParam(':estado', $estado, PDO::PARAM_STR);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$conexion) {
+        throw new Exception("No se pudo establecer la conexión a la base de datos.");
+    }
+
+    try {
+        $sql = "SELECT 
+                    p.id_pedido, 
+                    c.nombre_cliente, 
+                    ep.nombre_estado AS estado, 
+                    p.total_pedido AS total, 
+                    p.fecha_pedido AS fecha
+                FROM pedidos p
+                JOIN clientes c ON p.id_cliente = c.id_cliente
+                JOIN estado_pedido ep ON p.id_estado = ep.id_estado
+                WHERE ep.nombre_estado = :estado";
+        
+        $stmt = $conexion->prepare($sql);
+        $stmt->bindParam(':estado', $estado, PDO::PARAM_STR);
+        $stmt->execute();
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al obtener pedidos por estado: " . $e->getMessage();
+        return [];
+    }
 }
+
+
 function buscarHistorialPedidos($criterio, $valor)
 {
     $conn = obtenerConexion();
