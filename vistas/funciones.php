@@ -105,7 +105,7 @@ function agregarCliente($nombre, $apellido = null, $dni_cliente = null, $email =
         }
 
         $conn->commit();
-        return $id_cliente; 
+        return $id_cliente;
     } catch (PDOException $e) {
         $conn->rollBack();
         echo "Error al agregar cliente: " . $e->getMessage();
@@ -148,7 +148,8 @@ function actualizarCliente($id_cliente, $nombre, $apellido = null, $email = null
     }
 }
 
-function obtenerClientesConDetalles($busqueda) {
+function obtenerClientesConDetalles($busqueda)
+{
     $conn = obtenerConexion();
     if (!$conn) return [];
 
@@ -375,53 +376,58 @@ function obtenerDireccionesCliente($id_cliente)
     }
 }
 
-function obtenerProductos($busqueda = null, $categoria = null, $subcategoria = null, $ordenar_por_precio = null)
-{
+function obtenerProductosDisponibles() {
     $conn = obtenerConexion();
-    if (!$conn) {
-        return [];
-    }
-
-    $parametros = [];
-    $sentencia = "SELECT p.*, s.nombre_subcategoria, c.nombre_categoria
-                  FROM productos p
-                  JOIN subcategorias s ON p.id_subcategoria = s.id_subcategoria
-                  JOIN categorias c ON s.id_categoria = c.id_categoria";
-
-    // Filtros de búsqueda
-    if (isset($busqueda) && $busqueda !== '') {
-        $sentencia .= " WHERE p.nombre_producto LIKE ? OR s.nombre_subcategoria LIKE ? OR c.nombre_categoria LIKE ?";
-        $parametros[] = "%$busqueda%";
-        $parametros[] = "%$busqueda%";
-        $parametros[] = "%$busqueda%";
-    }
-
-    // Filtro de categoría
-    if (isset($categoria) && $categoria !== '') {
-        $sentencia .= " AND c.nombre_categoria = ?";
-        $parametros[] = $categoria;
-    }
-
-    // Filtro de subcategoría
-    if (isset($subcategoria) && $subcategoria !== '') {
-        $sentencia .= " AND s.nombre_subcategoria = ?";
-        $parametros[] = $subcategoria;
-    }
-
-    // Ordenar por precio
-    if (isset($ordenar_por_precio) && $ordenar_por_precio !== '') {
-        $sentencia .= " ORDER BY p.precio_venta $ordenar_por_precio";
-    }
-
-    try {
-        $stmt = $conn->prepare($sentencia);
-        $stmt->execute($parametros);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        echo "Error al obtener productos: " . $e->getMessage();
-        return [];
-    }
+    $stmt = $conn->prepare("
+        SELECT id_producto, nombre_producto, precio_venta, existencias 
+        FROM productos 
+        WHERE activo = 1 AND existencias > 0
+    ");
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+function obtenerProductos($busqueda, $categoria, $subcategoria, $ordenar_por_precio) {
+    $conn = obtenerConexion();
+    $sql = "
+        SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.existencias, 
+               p.activo, s.nombre_subcategoria, c.nombre_categoria
+        FROM productos p
+        INNER JOIN subcategorias s ON p.id_subcategoria = s.id_subcategoria
+        INNER JOIN categorias c ON s.id_categoria = c.id_categoria
+        WHERE 1=1
+    ";
+
+    // Aplicar filtros
+    if ($busqueda) {
+        $sql .= " AND p.nombre_producto LIKE :busqueda";
+    }
+    if ($categoria) {
+        $sql .= " AND c.nombre_categoria = :categoria";
+    }
+    if ($subcategoria) {
+        $sql .= " AND s.nombre_subcategoria = :subcategoria";
+    }
+    if ($ordenar_por_precio) {
+        $sql .= " ORDER BY p.precio_venta $ordenar_por_precio";
+    }
+
+    $stmt = $conn->prepare($sql);
+
+    if ($busqueda) {
+        $stmt->bindValue(':busqueda', "%$busqueda%", PDO::PARAM_STR);
+    }
+    if ($categoria) {
+        $stmt->bindValue(':categoria', $categoria, PDO::PARAM_STR);
+    }
+    if ($subcategoria) {
+        $stmt->bindValue(':subcategoria', $subcategoria, PDO::PARAM_STR);
+    }
+
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 
 
 function actualizarProducto($id, $precio_venta)
@@ -726,16 +732,55 @@ function obtenerTotalProductos()
 function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_despacho, $id_direccion_envio)
 {
     $conn = obtenerConexion();
-    if (!$conn) return false;
+    if (!$conn) {
+        echo "Error: No se pudo establecer conexión con la base de datos.";
+        return false;
+    }
 
     try {
+        $conn->beginTransaction();
+
+        // Verificar que el usuario tiene un empleado asociado
+        $stmt = $conn->prepare("
+            SELECT id_empleado 
+            FROM usuarios 
+            WHERE id_usuario = ?
+        ");
+        $stmt->execute([$id_usuario]);
+        $empleado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$empleado || !isset($empleado['id_empleado'])) {
+            throw new Exception("El usuario no tiene un empleado asociado.");
+        }
+
+        $id_empleado = $empleado['id_empleado'];
+
+        // Crear el pedido
         $stmt = $conn->prepare("
             INSERT INTO pedidos (id_cliente, id_usuario, fecha_pedido, total_pedido, id_estado, id_pago, id_tipo_despacho, id_direccion_envio) 
             VALUES (?, ?, NOW(), ?, ?, ?, ?, ?)
         ");
         $stmt->execute([$id_cliente, $id_usuario, $total_pedido, 1, $id_pago, $id_despacho, $id_direccion_envio]);
-        return $conn->lastInsertId(); // Devuelve el ID del pedido recién creado
-    } catch (PDOException $e) {
+
+        // Obtener el ID del pedido recién creado
+        $idPedido = $conn->lastInsertId();
+
+        if (!$idPedido) {
+            throw new Exception("No se pudo obtener el ID del pedido creado.");
+        }
+
+        // Registrar el estado inicial en el historial
+        $stmt = $conn->prepare("
+            INSERT INTO historial_estado_pedidos (id_pedido, id_estado, fecha_cambio, id_empleado)
+            VALUES (?, ?, NOW(), ?)
+        ");
+        $stmt->execute([$idPedido, 1, $id_empleado]); // Estado "Pendiente"
+
+        $conn->commit();
+
+        return $idPedido;
+    } catch (Exception $e) {
+        $conn->rollBack();
         echo "Error al crear pedido: " . $e->getMessage();
         return false;
     }
@@ -745,7 +790,7 @@ function crearPedido($id_cliente, $id_usuario, $total_pedido, $id_pago, $id_desp
 function obtenerHistorialComprasCliente($id_cliente)
 {
     $conn = obtenerConexion();
-    $sql = "SELECT p.id_pedido, p.fecha_pedido, p.total_pedido, ep.descripcion_estado AS estado
+    $sql = "SELECT p.id_pedido, p.fecha_pedido, p.total_pedido, ep.nombre_estado AS estado, ep.descripcion AS descripcion_estado
             FROM pedidos p
             JOIN estado_pedido ep ON p.id_estado = ep.id_estado
             WHERE p.id_cliente = :id_cliente
@@ -873,7 +918,8 @@ function obtenerHistorialCliente($id_cliente)
     }
 }
 
-function obtenerClientePorId($id_cliente) {
+function obtenerClientePorId($id_cliente)
+{
     $conn = obtenerConexion();
     if (!$conn) return null;
 
@@ -994,56 +1040,138 @@ function agregarDetallePedido($id_pedido, $id_producto, $cantidad, $precio_venta
         return false;
     }
 }
-
-
-function actualizarEstadoPedido($id_pedido, $id_estado, $id_empleado = null)
+function obtenerEmpleadoDesdeUsuario($idPedido)
 {
-    $conexion = obtenerConexion();
+    $conn = obtenerConexion();
+    if (!$conn) return null;
 
     try {
-        // Iniciar transacción
-        $conexion->beginTransaction();
+        $stmt = $conn->prepare("
+            SELECT u.id_empleado 
+            FROM pedidos p
+            JOIN usuarios u ON p.id_usuario = u.id_usuario
+            WHERE p.id_pedido = ?
+        ");
+        $stmt->execute([$idPedido]);
+        return $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        echo "Error al obtener el empleado desde el usuario: " . $e->getMessage();
+        return null;
+    }
+}
 
-        $sqlVerificarEmpleado = "SELECT id_empleado FROM historial_estado_pedidos 
-                                 WHERE id_pedido = :id_pedido ORDER BY fecha_cambio DESC LIMIT 1";
-        $stmtVerificarEmpleado = $conexion->prepare($sqlVerificarEmpleado);
-        $stmtVerificarEmpleado->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
-        $stmtVerificarEmpleado->execute();
-        $empleadoExistente = $stmtVerificarEmpleado->fetch(PDO::FETCH_ASSOC);
+function actualizarEstadoProducto($idProducto, $activo) {
+    $conn = obtenerConexion();
+    $stmt = $conn->prepare("UPDATE productos SET activo = ? WHERE id_producto = ?");
+    return $stmt->execute([$activo, $idProducto]);
+}
 
-        if ($empleadoExistente && !empty($empleadoExistente['id_empleado'])) {
-            $id_empleado = $empleadoExistente['id_empleado'];
+function actualizarStockProducto($idProducto, $cantidadVendida) {
+    $conn = obtenerConexion();
+    $stmt = $conn->prepare("UPDATE productos SET existencias = existencias - ? WHERE id_producto = ?");
+    $stmt->execute([$cantidadVendida, $idProducto]);
+
+    // Verificar si el stock llegó a 0
+    $stmt = $conn->prepare("SELECT existencias FROM productos WHERE id_producto = ?");
+    $stmt->execute([$idProducto]);
+    $stock = $stmt->fetchColumn();
+
+    if ($stock <= 0) {
+        $stmt = $conn->prepare("UPDATE productos SET activo = 0 WHERE id_producto = ?");
+        $stmt->execute([$idProducto]);
+    }
+}
+
+function actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idEmpleado = null)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return false;
+
+    try {
+        $conn->beginTransaction();
+
+        // Verificar si el pedido existe
+        $stmt = $conn->prepare("SELECT id_estado FROM pedidos WHERE id_pedido = ?");
+        $stmt->execute([$idPedido]);
+        $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$pedido) {
+            throw new Exception("El pedido no existe.");
         }
 
-        $sql = "UPDATE pedidos SET id_estado = :id_estado WHERE id_pedido = :id_pedido";
-        $stmt = $conexion->prepare($sql);
-        $stmt->bindParam(':id_estado', $id_estado, PDO::PARAM_INT);
-        $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
-        $stmt->execute();
+        // Cambiar el estado del pedido
+        $stmt = $conn->prepare("UPDATE pedidos SET id_estado = ? WHERE id_pedido = ?");
+        $stmt->execute([$nuevoEstadoId, $idPedido]);
 
-        $sqlHistorial = "INSERT INTO historial_estado_pedidos (id_pedido, id_estado, fecha_cambio, id_empleado)
-                         VALUES (:id_pedido, :id_estado, NOW(), :id_empleado)";
-        $stmtHistorial = $conexion->prepare($sqlHistorial);
-        $stmtHistorial->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
-        $stmtHistorial->bindParam(':id_estado', $id_estado, PDO::PARAM_INT);
-        $stmtHistorial->bindParam(':id_empleado', $id_empleado, PDO::PARAM_INT);
-        $stmtHistorial->execute();
+        // Registrar el nuevo estado en el historial
+        $stmt = $conn->prepare("
+            INSERT INTO historial_estado_pedidos (id_pedido, id_estado, fecha_cambio, id_empleado)
+            VALUES (?, ?, NOW(), ?)
+        ");
+        $stmt->execute([$idPedido, $nuevoEstadoId, $idEmpleado]);
 
-        $conexion->commit();
-
+        $conn->commit();
         return true;
     } catch (Exception $e) {
-        $conexion->rollBack();
+        $conn->rollBack();
         echo "Error al actualizar el estado del pedido: " . $e->getMessage();
         return false;
     }
 }
 
+function obtenerHistorialConDescripcion($id_pedido)
+{
+    $conn = obtenerConexion();
+    $sql = "SELECT es.nombre_estado AS estado, 
+                   es.descripcion AS descripcion,
+                   hep.fecha_cambio, 
+                   e.nombre_empleado, e.apellido_empleado
+            FROM historial_estado_pedidos hep
+            JOIN estado_pedido es ON hep.id_estado = es.id_estado
+            LEFT JOIN empleados e ON hep.id_empleado = e.id_empleado
+            WHERE hep.id_pedido = :id_pedido
+            ORDER BY hep.fecha_cambio ASC";
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
+    $stmt->execute();
+    
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+function obtenerPedidosPorEstadoYFecha($nombreEstado, $fechaHoy)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return [];
+
+    try {
+        $sql = "
+            SELECT p.id_pedido, p.id_cliente, c.nombre_cliente, p.total_pedido, p.fecha_pedido, e.nombre_estado
+            FROM pedidos p
+            JOIN clientes c ON p.id_cliente = c.id_cliente
+            JOIN estado_pedido e ON p.id_estado = e.id_estado
+            WHERE e.nombre_estado = :nombreEstado AND DATE(p.fecha_pedido) = :fechaHoy
+            ORDER BY p.fecha_pedido DESC
+        ";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':nombreEstado', $nombreEstado, PDO::PARAM_STR);
+        $stmt->bindParam(':fechaHoy', $fechaHoy, PDO::PARAM_STR);
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al obtener pedidos por estado y fecha: " . $e->getMessage();
+        return [];
+    }
+}
+
+
 
 function obtenerHistorialEstadoPedido($id_pedido)
 {
     $conn = obtenerConexion();
-    $sql = "SELECT es.descripcion_estado AS estado, 
+    $sql = "SELECT es.nombre_estado AS estado, 
                    hep.fecha_cambio, 
                    e.nombre_empleado, e.apellido_empleado
             FROM historial_estado_pedidos hep
@@ -1315,17 +1443,25 @@ function obtenerDatosUsuario($id_usuario)
 
 function obtenerMotorizados()
 {
-    $conexion = obtenerConexion();
-    $sql = "SELECT e.id_empleado, e.nombre_empleado, e.apellido_empleado 
+    $conn = obtenerConexion();
+    try {
+        $sql = "
+            SELECT e.id_empleado, e.nombre_empleado, e.apellido_empleado 
             FROM empleados e
             JOIN usuarios u ON e.id_empleado = u.id_empleado
             JOIN usuarios_roles ur ON u.id_usuario = ur.id_usuario
             JOIN roles r ON ur.id_rol = r.id_rol
-            WHERE r.nombre_rol = 'Motorizado'";
-    $stmt = $conexion->prepare($sql);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            WHERE r.nombre_rol = 'Motorizado'
+        ";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al obtener motorizados: " . $e->getMessage();
+        return [];
+    }
 }
+
 
 function anularPedido($id_pedido)
 {
@@ -1357,13 +1493,84 @@ function revertirStock($id_pedido)
 
 function cancelarVenta($id_pedido)
 {
-    if (anularPedido($id_pedido)) {
-        revertirStock($id_pedido);
+    $conn = obtenerConexion();
+    if (!$conn) return false;
+
+    try {
+        $conn->beginTransaction();
+
+        // Verificar si el pedido existe
+        $stmt = $conn->prepare("SELECT id_estado FROM pedidos WHERE id_pedido = ?");
+        $stmt->execute([$id_pedido]);
+        $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$pedido) {
+            throw new Exception("El pedido no existe.");
+        }
+
+        // Cambiar el estado del pedido a "Cancelado" (ID 9 asumiendo que es el ID del estado "Cancelado")
+        $stmt = $conn->prepare("UPDATE pedidos SET id_estado = ? WHERE id_pedido = ?");
+        $stmt->execute([9, $id_pedido]);
+
+        // Registrar el cambio en el historial
+        $stmt = $conn->prepare("
+            INSERT INTO historial_estado_pedidos (id_pedido, id_estado, fecha_cambio, id_empleado)
+            VALUES (?, ?, NOW(), ?)
+        ");
+        $stmt->execute([$id_pedido, 9, $_SESSION['id_usuario']]);
+
+        $conn->commit();
         return true;
-    } else {
+    } catch (Exception $e) {
+        $conn->rollBack();
+        echo "Error al cancelar el pedido: " . $e->getMessage();
         return false;
     }
 }
+
+
+function buscarPedidoPorId($idPedido)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return null;
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT p.id_pedido, c.nombre_cliente, c.apellido_cliente, p.total_pedido as total, 
+                   p.fecha_pedido as fecha, e.descripcion_estado as estado, p.id_empleado
+            FROM pedidos p
+            INNER JOIN clientes c ON p.id_cliente = c.id_cliente
+            INNER JOIN estado_pedido e ON p.id_estado = e.id_estado
+            WHERE p.id_pedido = ?
+        ");
+        $stmt->execute([$idPedido]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo "Error al buscar pedido: " . $e->getMessage();
+        return null;
+    }
+}
+
+function limpiarPedidosAntiguos($fechaLimite)
+{
+    $conn = obtenerConexion();
+    if (!$conn) return false;
+
+    try {
+        $stmt = $conn->prepare("
+            UPDATE pedidos 
+            SET id_estado = (SELECT id_estado FROM estado_pedido WHERE descripcion_estado = 'Cancelado') 
+            WHERE id_estado = (SELECT id_estado FROM estado_pedido WHERE descripcion_estado = 'Pendiente')
+            AND fecha_pedido < ?
+        ");
+        $stmt->execute([$fechaLimite]);
+        return true;
+    } catch (PDOException $e) {
+        echo "Error al limpiar pedidos antiguos: " . $e->getMessage();
+        return false;
+    }
+}
+
 
 function obtenerDetallesPedido($id_pedido)
 {
@@ -1393,14 +1600,22 @@ function obtenerProductosPorPedido($id_pedido)
 function obtenerPedidoPorId($id_pedido)
 {
     $conn = obtenerConexion();
-    $sql = "SELECT p.id_pedido, c.nombre_cliente, p.fecha_pedido, p.total_pedido, ep.descripcion_estado AS estado, 
-                   p.id_direccion_envio, e.nombre_empleado, e.apellido_empleado
-            FROM pedidos p
-            JOIN clientes c ON p.id_cliente = c.id_cliente
-            JOIN estado_pedido ep ON p.id_estado = ep.id_estado
-            LEFT JOIN usuarios u ON p.id_usuario = u.id_usuario  -- Unir con la tabla usuarios
-            LEFT JOIN empleados e ON u.id_empleado = e.id_empleado  -- Unir con la tabla empleados para obtener el nombre y apellido del empleado
-            WHERE p.id_pedido = :id_pedido";
+    $sql = "
+        SELECT 
+            p.*, 
+            c.nombre_cliente, 
+            ur.nombre_usuario AS usuario_gestor, 
+            ur.id_usuario AS id_usuario_gestor, 
+            e.nombre_empleado AS motorizado_nombre, 
+            e.apellido_empleado AS motorizado_apellido, 
+            ep.nombre_estado AS estado
+        FROM pedidos p
+        JOIN clientes c ON p.id_cliente = c.id_cliente
+        JOIN usuarios ur ON p.id_usuario = ur.id_usuario
+        LEFT JOIN empleados e ON p.id_empleado = e.id_empleado
+        JOIN estado_pedido ep ON p.id_estado = ep.id_estado
+        WHERE p.id_pedido = :id_pedido
+    ";
     $stmt = $conn->prepare($sql);
     $stmt->bindParam(':id_pedido', $id_pedido, PDO::PARAM_INT);
     $stmt->execute();

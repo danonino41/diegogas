@@ -136,21 +136,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </thead>
                     <tbody>
                         <?php foreach ($productos as $producto): ?>
-                            <tr>
+                            <tr class="<?php echo $producto['activo'] ? '' : 'text-muted'; ?>">
                                 <td><?php echo htmlspecialchars($producto['nombre_producto']); ?></td>
-                                <td><?php echo htmlspecialchars($producto['precio_venta']); ?></td>
+                                <td><?php echo number_format($producto['precio_venta'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($producto['existencias']); ?></td>
                                 <td><?php echo htmlspecialchars($producto['nombre_subcategoria']); ?></td>
                                 <td><?php echo htmlspecialchars($producto['nombre_categoria']); ?></td>
                                 <td>
                                     <form method="POST" action="#productos">
-                                        <input type="number" name="cantidad" value="1" min="1" class="form-control" style="width: 80px;">
+                                        <input type="number" name="cantidad" value="1" min="1" class="form-control" style="width: 80px;"
+                                            <?php echo $producto['activo'] && $producto['existencias'] > 0 ? '' : 'disabled'; ?>>
                                         <input type="hidden" name="id_producto" value="<?php echo htmlspecialchars($producto['id_producto']); ?>">
                                         <input type="hidden" name="nombre_producto" value="<?php echo htmlspecialchars($producto['nombre_producto']); ?>">
                                         <input type="hidden" name="precio_venta" value="<?php echo htmlspecialchars($producto['precio_venta']); ?>">
                                 </td>
                                 <td>
-                                    <button type="submit" name="agregar_producto" class="btn btn-success btn-sm">Agregar</button>
+                                    <button type="submit" name="agregar_producto" class="btn btn-success btn-sm"
+                                        <?php echo $producto['activo'] && $producto['existencias'] > 0 ? '' : 'disabled'; ?>>
+                                        Agregar
+                                    </button>
                                     </form>
                                 </td>
                             </tr>

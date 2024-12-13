@@ -120,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
                                 <th>Existencias</th>
                                 <th>Subcategoría</th>
                                 <th>Categoría</th>
+                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -137,13 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_producto'])) {
                                         <td><?php echo htmlspecialchars($producto['nombre_subcategoria']); ?></td>
                                         <td><?php echo htmlspecialchars($producto['nombre_categoria']); ?></td>
                                         <td>
+                                            <?php echo $producto['activo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-danger">Inactivo</span>'; ?>
+                                        </td>
+                                        <td>
                                             <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditarProducto"
                                                 data-id="<?php echo $producto['id_producto']; ?>"
-                                                data-nombre="<?php echo htmlspecialchars($producto['nombre_producto']); ?>"
-                                                data-precio_venta="<?php echo htmlspecialchars($producto['precio_venta']); ?>"
-                                                data-existencias="<?php echo htmlspecialchars($producto['existencias']); ?>"
-                                                data-id_subcategoria="<?php echo htmlspecialchars($producto['id_subcategoria']); ?>"
-                                                data-id_proveedor="<?php echo htmlspecialchars($producto['id_proveedor']); ?>">
+                                                data-precio_venta="<?php echo htmlspecialchars($producto['precio_venta']); ?>">
                                                 <i class="fas fa-edit"></i> Editar
                                             </button>
                                         </td>

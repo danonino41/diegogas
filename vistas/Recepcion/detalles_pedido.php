@@ -28,7 +28,10 @@ $detallesPedido = obtenerDetallesPedido($id_pedido);
 $historialEstadoPedido = obtenerHistorialEstadoPedido($id_pedido);
 
 // Obtener la dirección de envío del pedido usando la función
-$direccionEnvio = obtenerDireccionEnvio($pedido['id_direccion_envio']);
+$direccionEnvio = null;
+if (isset($pedido['id_direccion_envio']) && !empty($pedido['id_direccion_envio'])) {
+    $direccionEnvio = obtenerDireccionEnvio($pedido['id_direccion_envio']);
+}
 
 $mensaje = '';
 ?>
@@ -60,8 +63,11 @@ $mensaje = '';
                 <p><strong>Fecha del Pedido:</strong> <?php echo htmlspecialchars($pedido['fecha_pedido']); ?></p>
                 <p><strong>Total:</strong> S/ <?php echo htmlspecialchars($pedido['total_pedido']); ?></p>
                 <p><strong>Estado:</strong> <?php echo htmlspecialchars($pedido['estado']); ?></p>
-                <p><strong>Empleado que gestionó el pedido:</strong> 
-                    <?php echo htmlspecialchars($pedido['nombre_empleado'] . ' ' . $pedido['apellido_empleado'] ?? 'No asignado'); ?>
+                <p><strong>Usuario que gestionó el pedido:</strong>
+                    <?php echo htmlspecialchars($pedido['usuario_gestor']); ?>
+                </p>
+                <p><strong>Motorizado Asignado:</strong>
+                    <?php echo htmlspecialchars(($pedido['motorizado_nombre'] ?? 'No asignado') . ' ' . ($pedido['motorizado_apellido'] ?? '')); ?>
                 </p>
             </div>
         </div>
