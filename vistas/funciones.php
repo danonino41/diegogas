@@ -1090,8 +1090,8 @@ function actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idEmpleado = null)
     try {
         $conn->beginTransaction();
 
-        // Verificar si el pedido existe
-        $stmt = $conn->prepare("SELECT id_estado FROM pedidos WHERE id_pedido = ?");
+        // Verificar si el pedido existe y obtener detalles relevantes
+        $stmt = $conn->prepare("SELECT id_estado, total_pedido, id_cliente, id_empleado FROM pedidos WHERE id_pedido = ?");
         $stmt->execute([$idPedido]);
         $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1099,9 +1099,22 @@ function actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idEmpleado = null)
             throw new Exception("El pedido no existe.");
         }
 
-        // Cambiar el estado del pedido
-        $stmt = $conn->prepare("UPDATE pedidos SET id_estado = ? WHERE id_pedido = ?");
-        $stmt->execute([$nuevoEstadoId, $idPedido]);
+        $estadoActual = $pedido['id_estado'];
+        $totalPedido = $pedido['total_pedido'];
+        $idCliente = $pedido['id_cliente'];
+        $idEmpleadoActual = $pedido['id_empleado'];
+
+        // Determinar el empleado responsable
+        if (!$idEmpleado && in_array($nuevoEstadoId, [4, 5, 6])) { // Estados que requieren motorizado
+            $idEmpleado = $idEmpleadoActual;
+            if (!$idEmpleado) {
+                throw new Exception("Se requiere un motorizado asignado para este estado.");
+            }
+        }
+
+        // Actualizar el estado del pedido
+        $stmt = $conn->prepare("UPDATE pedidos SET id_estado = ?, id_empleado = ? WHERE id_pedido = ?");
+        $stmt->execute([$nuevoEstadoId, $idEmpleado, $idPedido]);
 
         // Registrar el nuevo estado en el historial
         $stmt = $conn->prepare("
@@ -1109,6 +1122,18 @@ function actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idEmpleado = null)
             VALUES (?, ?, NOW(), ?)
         ");
         $stmt->execute([$idPedido, $nuevoEstadoId, $idEmpleado]);
+
+        // Generar la boleta si el estado es "Entregado" (id_estado = 6)
+        if ($nuevoEstadoId == 6) {
+            $numeroBoleta = generarNumeroBoleta(); // Función para generar el número único de la boleta
+            $fechaBoleta = date('Y-m-d H:i:s');
+
+            $stmt = $conn->prepare("
+                INSERT INTO boletas (id_pedido, numero_boleta, fecha_boleta, total_boleta, id_cliente, id_empleado)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$idPedido, $numeroBoleta, $fechaBoleta, $totalPedido, $idCliente, $idEmpleado]);
+        }
 
         $conn->commit();
         return true;
@@ -1118,6 +1143,14 @@ function actualizarEstadoPedido($idPedido, $nuevoEstadoId, $idEmpleado = null)
         return false;
     }
 }
+
+// Función para generar un número único de boleta
+function generarNumeroBoleta()
+{
+    // Generar un número único utilizando la fecha y un número aleatorio
+    return 'BOL-' . date('YmdHis') . '-' . rand(1000, 9999);
+}
+
 
 function obtenerHistorialConDescripcion($id_pedido)
 {
