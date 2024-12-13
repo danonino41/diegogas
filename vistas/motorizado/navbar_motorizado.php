@@ -15,9 +15,9 @@
                 <li class="nav-item">
                     <a class="nav-link" href="pedidos_asignados_motorizado.php">Pedidos Asignados</a>
                 </li>
-                <!--<li class="nav-item">
+                <li class="nav-item">
                     <a class="nav-link" href="historial_pedidos_motorizado.php">Historial de Pedidos</a>
-                </li>-->
+                </li>
             </ul>
             
             <!-- Dropdown de perfil en la esquina derecha -->
